@@ -1,4 +1,4 @@
-# 🚀 ContriHub — Open Source Contribution Portfolio
+# ContriHub — Open Source Contribution Portfolio
 
 ContriHub is a **full-stack web application** that helps developers **visually showcase their open-source contributions** in a structured, portfolio-friendly format.
 
