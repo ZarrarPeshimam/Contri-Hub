@@ -106,7 +106,7 @@ export default function DraggableCollectionsGrid({ collections, username, onReor
           across all sibling cards so they slide in sync, not independently.
         */}
         <LayoutGroup>
-          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
+          <div className="pt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
             {collections.map((c) => (
               <SortableCollectionCard
                 key={c._id}

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import api from "../../lib/api";
-import { Edit2, Trash2, ExternalLink, GitBranch, Sparkles, Link2, Loader2 } from "lucide-react";
+import { Edit2, Trash2, ExternalLink, GitBranch, Sparkles, Link2, Loader2, Star } from "lucide-react";
 import { cleanMarkdown } from "../../lib/github";
 import LinkedIssuesEditor from "./LinkedIssuesEditor";
 import AISummarizerModal from "./AISummarizerModal";
+import ManageHighlightModal from "./ManageHighlightModal";
 import { useToast, ToastContainer } from "../ui/Toast";
 
 export default function PRCard({
@@ -13,6 +14,9 @@ export default function PRCard({
   onUpdated,
   onDeleted,
   collectionSlug,
+  isSelf,
+  mode = "full",
+  collectionBadge,
 }) {
   /* ── Edit mode ── */
   const [isEditing, setIsEditing] = useState(false);
@@ -31,10 +35,26 @@ export default function PRCard({
   /* ── AI modal ── */
   const [aiOpen, setAiOpen] = useState(false);
 
+  /* ── Manage Highlight modal ── */
+  const [highlightOpen, setHighlightOpen] = useState(false);
+
   /* ── Local toasts ── */
   const { toasts, showToast, dismiss } = useToast();
 
-  const isOwner = Boolean(onDeleted);
+  /**
+   * isOwner — prefers the explicit `isSelf` prop (used by every page that
+   * renders this card). Falls back to the presence of `onDeleted` for
+   * backward compatibility with any caller that doesn't pass `isSelf`.
+   */
+  const isOwner = typeof isSelf === "boolean" ? isSelf : Boolean(onDeleted);
+
+  /**
+   * "showcase" mode (used by the Highlights pages) is a read-only view of
+   * the same card: Edit / Sync Issues / Delete / AI Summarizer are hidden.
+   * The Star (Manage Highlight) control stays available to the owner so
+   * they can unhighlight a contribution straight from the Highlights page.
+   */
+  const isShowcase = mode === "showcase";
 
   /* ── Handlers ── */
 
@@ -113,61 +133,78 @@ export default function PRCard({
   return (
     <>
       <div
-        className="group relative w-full max-w-2xl overflow-hidden rounded-2xl bg-purple-950 border border-gray-700 transition-all duration-300 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 cursor-pointer"
+        className="group relative w-full max-w-2xl overflow-hidden rounded-2xl bg-[#2B0A10] border border-gray-700 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#45101D]/40 hover:-translate-y-0.5 cursor-pointer"
         onClick={() => !isEditing && onToggle()}
       >
 
-        {/* ── Owner hover buttons: Edit | Sync Issues | Delete ── */}
+        {/* ── Owner hover buttons: Edit | Sync Issues | Highlight | Delete ── */}
         {isOwner && (
           <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            {/* Edit */}
+            {!isShowcase && (
+              <>
+                {/* Edit */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+                  className="p-2 bg-gray-900/90 hover:bg-[#6A1B2E] rounded-lg text-white transition-colors"
+                  title="Edit contribution"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+
+                {/* Sync Issues */}
+                <button
+                  onClick={handleSyncIssues}
+                  disabled={syncing}
+                  className="p-2 bg-gray-900/90 hover:bg-cyan-600 rounded-lg text-white transition-colors disabled:opacity-50"
+                  title="Re-scan PR for linked issue references"
+                >
+                  {syncing
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Link2 className="w-4 h-4" />
+                  }
+                </button>
+              </>
+            )}
+
+            {/* Manage Highlight — kept in every mode, including showcase */}
             <button
-              onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
-              className="p-2 bg-gray-900/90 hover:bg-violet-600 rounded-lg text-white transition-colors"
-              title="Edit contribution"
+              onClick={(e) => { e.stopPropagation(); setHighlightOpen(true); }}
+              className="p-2 bg-gray-900/90 hover:bg-[#6A1B2E] rounded-lg text-white transition-colors"
+              title={pr.highlightScope && pr.highlightScope !== "none" ? "Manage Highlight" : "Add to Highlights"}
             >
-              <Edit2 className="w-4 h-4" />
+              <Star
+                className={`w-4 h-4 ${pr.highlightScope && pr.highlightScope !== "none" ? "fill-[#C48A97] text-[#C48A97]" : ""}`}
+              />
             </button>
 
-            {/* Sync Issues */}
-            <button
-              onClick={handleSyncIssues}
-              disabled={syncing}
-              className="p-2 bg-gray-900/90 hover:bg-cyan-600 rounded-lg text-white transition-colors disabled:opacity-50"
-              title="Re-scan PR for linked issue references"
-            >
-              {syncing
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Link2 className="w-4 h-4" />
-              }
-            </button>
-
-            {/* Delete */}
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDelete(); }}
-              disabled={deleting}
-              className="p-2 bg-gray-900/90 hover:bg-red-600 rounded-lg text-white transition-colors disabled:opacity-50"
-              title="Delete contribution"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {!isShowcase && (
+              /* Delete */
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDelete(); }}
+                disabled={deleting}
+                className="p-2 bg-gray-900/90 hover:bg-red-600 rounded-lg text-white transition-colors disabled:opacity-50"
+                title="Delete contribution"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )}
 
         {/* ── Top section (always visible) ── */}
-        <div className="bg-gradient-to-b from-purple-950 to-purple-900 px-8 pt-7 pb-6">
+        <div className="bg-gradient-to-b from-[#2B0A10] to-[#45101D] px-8 pt-7 pb-6">
           {isEditing ? (
             <>
               <input
                 value={formData.title}
                 onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
-                className="w-full bg-transparent text-2xl font-semibold text-white border-b border-violet-500 focus:outline-none mb-3"
+                className="w-full bg-transparent text-2xl font-semibold text-white border-b border-[#6A1B2E] focus:outline-none mb-3"
                 placeholder="PR title"
               />
               <input
                 value={formData.url}
                 onChange={(e) => setFormData((p) => ({ ...p, url: e.target.value }))}
-                className="w-full bg-transparent text-purple-400 text-base border-b border-violet-500 focus:outline-none"
+                className="w-full bg-transparent text-[#C48A97] text-base border-b border-[#6A1B2E] focus:outline-none"
                 placeholder="https://github.com/user/repo/pull/123"
               />
             </>
@@ -178,11 +215,18 @@ export default function PRCard({
               </h3>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3">
+                {collectionBadge && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-black/30 text-[#D9AAB4] border border-[#6A1B2E]/40">
+                    <GitBranch className="w-3 h-3" />
+                    {collectionBadge}
+                  </span>
+                )}
+
                 <a
                   href={pr.url || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-purple-400 hover:text-white text-base inline-flex items-center gap-1.5 transition-colors"
+                  className="text-[#C48A97] hover:text-white text-base inline-flex items-center gap-1.5 transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {pr.repo}
@@ -199,7 +243,7 @@ export default function PRCard({
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-violet-900/60 border border-violet-500/30 text-violet-300 hover:text-white hover:border-violet-400 transition-colors font-mono"
+                        className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-[#45101D]/70 border border-[#6A1B2E]/40 text-[#D9AAB4] hover:text-white hover:border-[#93304A] transition-colors font-mono"
                       >
                         <GitBranch className="w-2.5 h-2.5" />
                         #{issue.issueNumber}
@@ -214,10 +258,10 @@ export default function PRCard({
 
         {/* ── Expandable bottom section ── */}
         <div
-          className={`overflow-hidden transition-all duration-500 ease-out bg-gradient-to-b from-purple-950 to-purple-900 border-t border-purple-800
+          className={`overflow-hidden transition-all duration-500 ease-out bg-gradient-to-b from-[#2B0A10] to-[#45101D] border-t border-[#5A1627]
             ${isOpen || isEditing ? "max-h-[620px]" : "max-h-0"}`}
         >
-          <div className="px-8 py-6 max-h-[540px] overflow-y-auto custom-scroll space-y-5">
+          <div className="px-8 py-6 max-h-[540px] overflow-y-auto maroon-scroll space-y-5">
             {isEditing ? (
               /* ── Edit mode ── */
               <>
@@ -280,7 +324,7 @@ export default function PRCard({
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-violet-900/60 border border-violet-500/30 text-violet-300 hover:text-white hover:border-violet-400 transition-colors"
+                          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-[#45101D]/70 border border-[#6A1B2E]/40 text-[#D9AAB4] hover:text-white hover:border-[#93304A] transition-colors"
                         >
                           <GitBranch className="w-3 h-3" />
                           <span className="font-mono">#{issue.issueNumber}</span>
@@ -297,7 +341,7 @@ export default function PRCard({
                     {pr.tags.map((tag, i) => (
                       <span
                         key={i}
-                        className="text-xs px-3 py-1 rounded-full bg-black/30 text-purple-200 border border-purple-500/30"
+                        className="text-xs px-3 py-1 rounded-full bg-black/30 text-[#D9AAB4] border border-[#6A1B2E]/40"
                       >
                         #{tag}
                       </span>
@@ -305,12 +349,12 @@ export default function PRCard({
                   </div>
                 )}
 
-                {/* ── Owner: AI Summarizer footer button ── */}
-                {isOwner && (
-                  <div className="pt-1 border-t border-purple-800/60">
+                {/* ── Owner: AI Summarizer footer button (hidden in showcase mode) ── */}
+                {isOwner && !isShowcase && (
+                  <div className="pt-1 border-t border-[#5A1627]/60">
                     <button
                       onClick={(e) => { e.stopPropagation(); setAiOpen(true); }}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/30 hover:border-violet-400/60 text-violet-300 hover:text-white text-sm font-medium transition-all"
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6A1B2E]/20 hover:bg-[#6A1B2E]/40 border border-[#6A1B2E]/40 hover:border-[#93304A]/70 text-[#D9AAB4] hover:text-white text-sm font-medium transition-all"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       AI Summarizer
@@ -329,6 +373,17 @@ export default function PRCard({
           pr={pr}
           collectionSlug={collectionSlug}
           onClose={() => setAiOpen(false)}
+          onUpdated={onUpdated}
+          showToast={showToast}
+        />
+      )}
+
+      {/* ── Manage Highlight Modal ── */}
+      {highlightOpen && (
+        <ManageHighlightModal
+          pr={pr}
+          collectionSlug={collectionSlug}
+          onClose={() => setHighlightOpen(false)}
           onUpdated={onUpdated}
           showToast={showToast}
         />

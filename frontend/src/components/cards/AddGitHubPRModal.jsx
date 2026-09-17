@@ -74,25 +74,25 @@ export default function AddGitHubPRModal({ collectionSlug, onClose, onFetched })
               placeholder="Enter tag (press Enter to add)"
               className="flex-1 h-11 px-4 rounded-xl bg-gray-950 border border-gray-700 
                          text-white placeholder-gray-400 focus:outline-none focus:ring-2 
-                         focus:ring-violet-500 focus:border-violet-500"
+                         focus:ring-[#6A1B2E] focus:border-[#6A1B2E]"
             />
             <button
               type="button"
               onClick={addTag}
-              className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 
+              className="px-6 py-2.5 rounded-xl bg-[#6A1B2E] hover:bg-[#7D2438] 
                          text-white font-medium transition-colors"
             >
               Add
             </button>
           </div>
 
-          {/* Purple Tag Capsules - Improved Design */}
+          {/* Maroon Tag Capsules - Improved Design */}
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-2 pt-1">
               {tags.map((tag) => (
                 <div
                   key={tag}
-                  className="group flex items-center gap-1.5 bg-violet-900/90 
+                  className="group flex items-center gap-1.5 bg-[#5A1627]/90 
                              text-white px-4 py-1.5 rounded-2xl text-sm font-medium 
                              transition-all duration-200 shadow-sm"
                 >
@@ -123,8 +123,8 @@ export default function AddGitHubPRModal({ collectionSlug, onClose, onFetched })
             </button>
             <button
               disabled={loading || (tags.length === 0 && !tagInput.trim())}
-              className="px-6 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 
-                         disabled:bg-violet-600/50 text-white font-medium 
+              className="px-6 py-2.5 rounded-xl bg-[#6A1B2E] hover:bg-[#7D2438] 
+                         disabled:bg-[#6A1B2E]/50 text-white font-medium 
                          transition-all disabled:cursor-not-allowed"
             >
               {loading ? "Fetching PRs..." : "Fetch PRs"}

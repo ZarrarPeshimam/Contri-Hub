@@ -34,7 +34,11 @@ export default function CollectionCard({ collection, username }) {
 
       <p className="text-sm text-gray-400">{collection.year}</p>
 
-      <p className="text-l py-3 pt-5 text-gray-200">
+      <p
+        className={`text-l py-3 pt-5 ${
+          collection.description ? "text-gray-200" : "text-transparent select-none"
+        }`}
+      >
         {collection.description || "No description provided."}
       </p>
 

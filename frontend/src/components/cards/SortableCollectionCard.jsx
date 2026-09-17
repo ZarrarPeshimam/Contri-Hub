@@ -98,7 +98,11 @@ export default function SortableCollectionCard({ collection, username, activeId 
       >
         <h3 className="text-xl font-semibold text-white pr-7">{collection.title}</h3>
         <p className="text-sm text-gray-400">{collection.year}</p>
-        <p className="text-l py-3 pt-5 text-gray-200">
+        <p
+          className={`text-l py-3 pt-5 ${
+            collection.description ? "text-gray-200" : "text-transparent select-none"
+          }`}
+        >
           {collection.description || "No description provided."}
         </p>
         <div className="mt-4 text-sm font-medium text-amber-400">

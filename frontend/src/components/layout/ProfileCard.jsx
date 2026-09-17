@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Github, Linkedin, Globe, Pencil } from "lucide-react";
-import Avatar from "../ui/Avatar";
+import AvatarUpload from "../ui/AvatarUpload";
 
 /**
  * ProfileCard
@@ -8,10 +8,14 @@ import Avatar from "../ui/Avatar";
  * GitHub/LinkedIn-style identity header with avatar on the right.
  *
  * Props:
- *   profile  – user object (displayName, username, bio, avatarUrl, socialLinks…)
- *   isSelf   – bool — shows Edit Profile button when true
+ *   profile         – user object (displayName, username, bio, avatarUrl, socialLinks…)
+ *   isSelf          – bool — shows Edit Profile button when true, and makes
+ *                      the avatar itself clickable for a new upload
+ *   onAvatarUpdated – (avatarUrl, user) => void — bubbled up from
+ *                      AvatarUpload after a successful upload
+ *   onAvatarError   – (message) => void — bubbled up on a failed upload
  */
-export default function ProfileCard({ profile, isSelf }) {
+export default function ProfileCard({ profile, isSelf, onAvatarUpdated, onAvatarError }) {
   if (!profile) return <ProfileCardSkeleton />;
 
   const displayName = profile.displayName || profile.username;
@@ -22,12 +26,15 @@ export default function ProfileCard({ profile, isSelf }) {
         
         {/* Avatar section - right side on sm+ */}
         <div className="flex flex-col items-center sm:items-end gap-3.5 shrink-0 self-center sm:self-start sm:mr-9">
-          <Avatar
+          <AvatarUpload
             avatarUrl={profile.avatarUrl}
             displayName={displayName}
             username={profile.username}
             size="xl"
             className="w-24 h-24 sm:w-32 sm:h-32" // slightly smaller
+            editable={isSelf}
+            onUploaded={onAvatarUpdated}
+            onError={onAvatarError}
           />
           
           {/* Edit button moved below avatar */}

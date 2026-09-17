@@ -433,6 +433,47 @@ router.delete("/:slug/contributions/:contributionId/delete", auth, async (req, r
   }
 });
 
+/* =========================
+   MANAGE HIGHLIGHT
+   PUT /api/collections/:slug/contributions/:contributionId/highlight
+
+   Updates only the highlightScope field on a contribution.
+   Validates:
+     - collection belongs to the authenticated user
+     - contribution belongs to that collection (and that user)
+     - highlightScope is one of the allowed enum values
+========================= */
+const VALID_HIGHLIGHT_SCOPES = ["none", "collection", "overall"];
+
+router.put("/:slug/contributions/:contributionId/highlight", auth, async (req, res) => {
+  try {
+    const { highlightScope } = req.body;
+
+    if (!VALID_HIGHLIGHT_SCOPES.includes(highlightScope)) {
+      return res.status(400).json({
+        message: `Invalid highlightScope. Must be one of: ${VALID_HIGHLIGHT_SCOPES.join(", ")}`,
+      });
+    }
+
+    const collection = await Collection.findOne({ user: req.userId, slug: req.params.slug });
+    if (!collection) return res.status(404).json({ message: "Collection not found" });
+
+    const contribution = await Contribution.findOneAndUpdate(
+      { _id: req.params.contributionId, user: req.userId, collectionId: collection._id },
+      { $set: { highlightScope } },
+      { new: true, runValidators: true }
+    );
+
+    if (!contribution)
+      return res.status(404).json({ message: "Contribution not found or unauthorized" });
+
+    res.json({ message: "Highlight updated successfully", contribution });
+  } catch (err) {
+    console.error("Update highlight error:", err);
+    res.status(500).json({ message: "Failed to update highlight" });
+  }
+});
+
 router.post("/:slug/contributions/:contributionId/sync-issues", auth, async (req, res) => {
   try {
     const collection = await Collection.findOne({ user: req.userId, slug: req.params.slug });

@@ -4,6 +4,7 @@ import { User, AtSign, Mail, Lock, Loader2, AlertCircle, CheckCircle2 } from "lu
 import api from "../lib/api";
 import AuthLayout from "../components/auth/AuthLayout";
 import AuthInput from "../components/auth/AuthInput";
+import GitHubButton from "../components/auth/GitHubButton";
 
 /**
  * Signup
@@ -73,6 +74,16 @@ export default function Signup() {
           </div>
         </div>
       ) : (
+        <>
+          <div className="space-y-4 mb-5">
+            <GitHubButton label="Continue with GitHub" />
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-xs text-gray-500">or</span>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+          </div>
+
         <form onSubmit={submit} className="space-y-4" noValidate>
           <AuthInput
             id="displayName"
@@ -142,6 +153,7 @@ export default function Signup() {
             You can add a bio, social links, and avatar later from your profile settings.
           </p>
         </form>
+        </>
       )}
     </AuthLayout>
   );

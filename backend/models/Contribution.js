@@ -73,6 +73,20 @@ const contributionSchema = new mongoose.Schema(
     },
 
     lastSyncedAt: { type: Date, default: null },
+
+    /**
+     * highlightScope — the single highlight state for this contribution.
+     * "none"       — not highlighted (default)
+     * "collection" — highlighted within its own collection only
+     * "overall"    — highlighted globally (higher priority than "collection";
+     *                drives visibility on the overall showcase page)
+     */
+    highlightScope: {
+      type: String,
+      enum: ["none", "collection", "overall"],
+      default: "none",
+      index: true,
+    },
   },
   { timestamps: true }
 );

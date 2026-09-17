@@ -5,15 +5,25 @@ import api from "../lib/api";
 import { useAuth } from "../hooks/useAuth";
 import AuthLayout from "../components/auth/AuthLayout";
 import AuthInput from "../components/auth/AuthInput";
+import GitHubButton from "../components/auth/GitHubButton";
+
+const GITHUB_ERROR_MESSAGES = {
+  access_denied: "GitHub sign-in was cancelled.",
+  invalid_state: "Your GitHub session expired. Please try again.",
+  oauth_failed: "Something went wrong connecting your GitHub account.",
+};
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+
+  const githubError = new URLSearchParams(location.search).get("github_error");
+  const [error, setError] = useState(
+    githubError ? GITHUB_ERROR_MESSAGES[githubError] || "GitHub sign-in failed." : ""
+  );
+  const [loading, setLoading] = useState(false);
 
   const update = (key) => (e) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -54,6 +64,15 @@ export default function Login() {
         </>
       }
     >
+      <div className="space-y-4 mb-5">
+        <GitHubButton label="Continue with GitHub" />
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-white/10" />
+          <span className="text-xs text-gray-500">or</span>
+          <div className="h-px flex-1 bg-white/10" />
+        </div>
+      </div>
+
       <form onSubmit={submit} className="space-y-4" noValidate>
         <AuthInput
           id="email"

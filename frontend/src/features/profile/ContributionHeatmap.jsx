@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import api from "../../lib/api";
 
 /**
@@ -10,6 +11,22 @@ import api from "../../lib/api";
  * computes counts dynamically from the Contribution collection — there is
  * no precomputed/cached heatmap data anywhere. This component is purely
  * presentational on top of that response.
+ *
+ * Layout stability:
+ *   - The outer card (border, background, padding, header slot, legend
+ *     footer) always renders with the same structure and a fixed
+ *     `min-h`, for every state — first load, a year switch, or an error.
+ *     It never unmounts or changes size, so nothing below it in the page
+ *     ever jumps.
+ *   - `data` is only ever replaced once a fetch actually *succeeds* — a
+ *     year switch does not clear it — so the previously-loaded grid
+ *     stays put (no skeleton flash) while the next one loads in the
+ *     background, then cross-fades in once ready.
+ *   - Only the inner grid + month-labels region animates. It's wrapped
+ *     in its own `relative overflow-hidden` box, keyed by `data.startDate`
+ *     (changes exactly when fresh data lands) so the transition fires
+ *     once per real content change — never on the `year` prop changing
+ *     alone, and never affects the card's own dimensions.
  */
 
 // Intensity scale — reuses the app's amber/gold accent instead of GitHub's
@@ -85,16 +102,53 @@ function buildMonthLabels(weeks) {
   });
 }
 
+// Fixed card height — chosen to comfortably fit the header line, the
+// grid (month-label row + 7 rows of 11px cells), and the legend footer,
+// so the card is exactly this tall whether it's showing a skeleton, an
+// error, or real data. This is what stops the "collapse and jerk" when
+// switching years.
+const CARD_MIN_HEIGHT = "min-h-[230px]";
+
 export function HeatmapSkeleton() {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-6">
+    <div className={`rounded-xl border border-white/[0.07] bg-white/[0.02] p-6 ${CARD_MIN_HEIGHT}`}>
       <div className="h-4 w-40 rounded bg-white/[0.06] animate-pulse mb-5" />
       <div className="h-28 w-full rounded-lg bg-white/[0.04] animate-pulse" />
+      <div className="flex items-center justify-end gap-1.5 mt-4">
+        <div className="h-3 w-16 rounded bg-white/[0.05] animate-pulse" />
+      </div>
     </div>
   );
 }
 
-export default function ContributionHeatmap({ username, year }) {
+/**
+ * Cross-fade + subtle directional-momentum variants for the inner grid
+ * only. Small (12px) offset so this reads as a cross-fade, not a swipe,
+ * and stays fully inside the grid's own `overflow-hidden` box.
+ */
+const gridVariants = {
+  enter: (direction) => ({
+    opacity: 0,
+    x: direction > 0 ? 12 : direction < 0 ? -12 : 0,
+  }),
+  center: {
+    opacity: 1,
+    x: 0,
+  },
+  exit: (direction) => ({
+    opacity: 0,
+    x: direction > 0 ? -12 : direction < 0 ? 12 : 0,
+  }),
+};
+
+/**
+ * @param {string} username
+ * @param {number|null} year
+ * @param {number} [direction] - -1 = came from a later year (slide/fade
+ *   in from the left), 1 = came from an earlier year (slide/fade in from
+ *   the right), 0 = no directional cue (e.g. first load).
+ */
+export default function ContributionHeatmap({ username, year, direction = 0 }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -111,6 +165,9 @@ export default function ContributionHeatmap({ username, year }) {
           ? `/api/users/${username}/activity-heatmap?year=${year}`
           : `/api/users/${username}/activity-heatmap`;
         const res = await api.get(url);
+        // Only ever replace `data` on success — a year switch never
+        // clears the previously-loaded grid, so the card never collapses
+        // to a skeleton mid-transition.
         if (!cancelled) setData(res.data);
       } catch {
         if (!cancelled) setError(true);
@@ -125,69 +182,99 @@ export default function ContributionHeatmap({ username, year }) {
     };
   }, [username, year]);
 
-  if (loading) return <HeatmapSkeleton />;
+  let weeks = [];
+  let monthLabels = [];
+  let label = "";
 
-  if (error || !data) {
-    return (
-      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-6 text-sm text-gray-500">
-        Couldn't load contribution activity.
-      </div>
-    );
+  if (data) {
+    weeks = buildWeeks(data.startDate, data.endDate, data.counts);
+    const total = Object.values(data.counts).reduce((sum, n) => sum + n, 0);
+    monthLabels = buildMonthLabels(weeks);
+
+    // The backend returns the same {year, startDate, endDate} shape for
+    // both window types — whether this is a full calendar year or a
+    // rolling 365-day window is derived from the dates themselves, not a
+    // separate flag.
+    const isFullCalendarYear =
+      data.year != null &&
+      data.startDate === `${data.year}-01-01` &&
+      data.endDate === `${data.year}-12-31`;
+
+    label = isFullCalendarYear
+      ? `${total} contribution${total === 1 ? "" : "s"} in ${data.year}`
+      : `${total} contribution${total === 1 ? "" : "s"} in the last year`;
   }
 
-  const weeks = buildWeeks(data.startDate, data.endDate, data.counts);
-  const total = Object.values(data.counts).reduce((sum, n) => sum + n, 0);
-  const monthLabels = buildMonthLabels(weeks);
-
-  // The backend returns the same {year, startDate, endDate} shape for both
-  // window types — whether this is a full calendar year or a rolling
-  // 365-day window is derived from the dates themselves, not a separate flag.
-  const isFullCalendarYear =
-    data.year != null &&
-    data.startDate === `${data.year}-01-01` &&
-    data.endDate === `${data.year}-12-31`;
-
-  const label = isFullCalendarYear
-    ? `${total} contribution${total === 1 ? "" : "s"} in ${data.year}`
-    : `${total} contribution${total === 1 ? "" : "s"} in the last year`;
-
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-6">
-      <p className="text-sm text-gray-400 mb-5">{label}</p>
-
-      <div className="overflow-x-auto custom-scroll">
-        <div className="inline-block min-w-full">
-          <div className="flex gap-[3px] mb-1">
-            {weeks.map((_, i) => (
-              <div
-                key={i}
-                className="w-[11px] shrink-0 text-[10px] leading-none text-gray-500 whitespace-nowrap"
-              >
-                {monthLabels[i] || ""}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-[3px]">
-            {weeks.map((week, wi) => (
-              <div key={wi} className="flex flex-col gap-[3px]">
-                {week.map((day, di) =>
-                  day.count === null ? (
-                    <div key={di} className="w-[11px] h-[11px]" />
-                  ) : (
-                    <div
-                      key={di}
-                      title={`${day.count} contribution${day.count === 1 ? "" : "s"} on ${day.date}`}
-                      className={`w-[11px] h-[11px] rounded-[2px] ${LEVELS[levelFor(day.count)]}`}
-                    />
-                  )
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className={`rounded-xl border border-white/[0.07] bg-white/[0.02] p-6 ${CARD_MIN_HEIGHT}`}>
+      {/* Header slot — always rendered here, never unmounted. Once data
+          has loaded at least once, it keeps showing the last-known label
+          (even mid-refetch) instead of flashing a skeleton every switch. */}
+      <div className="mb-5">
+        {data ? (
+          <p className="text-sm text-gray-400">{label}</p>
+        ) : loading ? (
+          <div className="h-4 w-40 rounded bg-white/[0.06] animate-pulse" />
+        ) : (
+          <p className="text-sm text-gray-500">Couldn't load contribution activity.</p>
+        )}
       </div>
 
+      {/* Only this inner region animates. `relative overflow-hidden`
+          bounds the small directional slide so it can never widen or
+          shift the card itself. */}
+      <div className="relative overflow-hidden">
+        <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+          {data ? (
+            <motion.div
+              key={data.startDate}
+              custom={direction}
+              variants={gridVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="overflow-x-auto custom-scroll"
+            >
+              <div className="inline-block min-w-full">
+                <div className="flex gap-[3px] mb-1">
+                  {weeks.map((_, i) => (
+                    <div
+                      key={i}
+                      className="w-[11px] shrink-0 text-[10px] leading-none text-gray-500 whitespace-nowrap"
+                    >
+                      {monthLabels[i] || ""}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-[3px]">
+                  {weeks.map((week, wi) => (
+                    <div key={wi} className="flex flex-col gap-[3px]">
+                      {week.map((day, di) =>
+                        day.count === null ? (
+                          <div key={di} className="w-[11px] h-[11px]" />
+                        ) : (
+                          <div
+                            key={di}
+                            title={`${day.count} contribution${day.count === 1 ? "" : "s"} on ${day.date}`}
+                            className={`w-[11px] h-[11px] rounded-[2px] ${LEVELS[levelFor(day.count)]}`}
+                          />
+                        )
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div key="grid-empty" className="h-28 w-full rounded-lg bg-white/[0.04] animate-pulse" />
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Legend footer — always rendered, static, part of the fixed
+          outer card. */}
       <div className="flex items-center justify-end gap-1.5 mt-4 text-[11px] text-gray-500">
         <span>Less</span>
         {LEVELS.map((cls, i) => (

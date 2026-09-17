@@ -75,7 +75,7 @@ export default function FabMenu({ actions = [] }) {
             <button
               onClick={() => handleAction(action.onClick)}
               aria-label={action.label}
-              className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-transform duration-150 active:scale-95 bg-violet-600 hover:bg-violet-500 text-white shadow-violet-900/50"
+              className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-transform duration-150 active:scale-95 bg-[#6A1B2E] hover:bg-[#7D2438] text-white shadow-[#45101D]/50"
             >
               {action.icon ?? (
                 <span className="text-lg font-light leading-none">+</span>
@@ -95,7 +95,7 @@ export default function FabMenu({ actions = [] }) {
           shadow-xl transition-all duration-250 active:scale-95
           ${open
             ? "bg-gray-700 hover:bg-gray-600 shadow-black/40 rotate-45"
-            : "bg-violet-600 hover:bg-violet-500 shadow-violet-900/50 rotate-0"
+            : "bg-[#6A1B2E] hover:bg-[#7D2438] shadow-[#45101D]/50 rotate-0"
           }
           text-white
         `}

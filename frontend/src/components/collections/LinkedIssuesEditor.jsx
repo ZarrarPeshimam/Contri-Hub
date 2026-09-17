@@ -71,7 +71,7 @@ export default function LinkedIssuesEditor({ repo, issues = [], onChange }) {
           {issues.map((issue) => (
             <span
               key={issue.issueNumber}
-              className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-violet-900/60 border border-violet-500/30 text-violet-200"
+              className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-[#45101D]/70 border border-[#6A1B2E]/40 text-[#D9AAB4]"
             >
               <span className="font-mono">#{issue.issueNumber}</span>
               {issue.source === "auto" && (
@@ -96,12 +96,12 @@ export default function LinkedIssuesEditor({ repo, issues = [], onChange }) {
           onChange={(e) => { setInput(e.target.value); setError(""); }}
           onKeyDown={handleKeyDown}
           placeholder="#50 or full issue URL"
-          className="flex-1 h-9 px-3 text-sm rounded-lg bg-gray-950 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+          className="flex-1 h-9 px-3 text-sm rounded-lg bg-gray-950 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#6A1B2E]"
         />
         <button
           type="button"
           onClick={addIssue}
-          className="px-3 h-9 rounded-lg bg-violet-700 hover:bg-violet-600 text-white transition-colors flex items-center gap-1 text-sm"
+          className="px-3 h-9 rounded-lg bg-[#6A1B2E] hover:bg-[#7D2438] text-white transition-colors flex items-center gap-1 text-sm"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>

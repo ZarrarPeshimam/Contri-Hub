@@ -26,7 +26,6 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState({
     displayName: "",
     bio: "",
-    avatarUrl: "",
     githubUsername: "",
     linkedinUrl: "",
     portfolioUrl: "",
@@ -41,7 +40,6 @@ export default function SettingsPage() {
       setProfile({
         displayName:    user.displayName    || "",
         bio:            user.bio            || "",
-        avatarUrl:      user.avatarUrl      || "",
         githubUsername: user.githubUsername || "",
         linkedinUrl:    user.linkedinUrl    || "",
         portfolioUrl:   user.portfolioUrl   || "",
@@ -124,13 +122,6 @@ export default function SettingsPage() {
             onChange={(v) => setProfile((p) => ({ ...p, bio: v }))}
             placeholder="e.g. Full-stack engineer · open source enthusiast"
             multiline
-          />
-          <ProfileField
-            label="Avatar URL"
-            description="Direct link to a profile image. Leave blank to use initials."
-            value={profile.avatarUrl}
-            onChange={(v) => setProfile((p) => ({ ...p, avatarUrl: v }))}
-            placeholder="https://example.com/avatar.jpg"
           />
           <ProfileField
             label="GitHub username"

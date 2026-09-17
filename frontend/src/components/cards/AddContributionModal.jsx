@@ -76,7 +76,7 @@ export default function AddContributionModal({
               text-white
               placeholder-gray-400
               focus:outline-none
-              focus:ring-2 focus:ring-violet-500
+              focus:ring-2 focus:ring-[#6A1B2E]
             "
             required
           />
@@ -96,7 +96,7 @@ export default function AddContributionModal({
               text-white
               placeholder-gray-400
               focus:outline-none
-              focus:ring-2 focus:ring-violet-500
+              focus:ring-2 focus:ring-[#6A1B2E]
             "
           />
 
@@ -117,7 +117,7 @@ export default function AddContributionModal({
               placeholder-gray-400
               resize-none
               focus:outline-none
-              focus:ring-2 focus:ring-violet-500
+              focus:ring-2 focus:ring-[#6A1B2E]
             "
           />
 
@@ -139,8 +139,8 @@ export default function AddContributionModal({
               className="
                 px-4 py-2
                 rounded-lg
-                bg-violet-600 hover:bg-violet-500
-                text-black
+                bg-[#6A1B2E] hover:bg-[#7D2438]
+                text-white
                 disabled:opacity-60
               "
             >

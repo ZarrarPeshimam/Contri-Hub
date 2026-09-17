@@ -1,13 +1,12 @@
+import "./config/loadEnv.js"; // MUST stay the first import — see that file for why
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authroutes.js";
 import collectionRoutes from "./routes/collectionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 
-dotenv.config();
 connectDB();
 
 const app = express();
@@ -33,3 +32,12 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+
+// routes/health.js (or directly in server.js / app.js)
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});

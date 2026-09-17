@@ -1,27 +1,42 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { RefreshCw, Github, GitPullRequest } from "lucide-react";
 import AddContributionModal from "../../components/cards/AddContributionModal";
 import AddGitHubPRModal from "../../components/cards/AddGitHubPRModal";
 import Timeline from "../../components/collections/Timeline";
 import TimelineItem from "../../components/collections/TimelineItem";
 import PRCard from "../../components/collections/PRCard";
+import CollectionSubNav from "../../components/collections/CollectionSubNav";
+import HighlightsNav from "../../components/highlights/HighlightsNav";
+import HighlightsEmptyState from "../../components/highlights/HighlightsEmptyState";
 import FabMenu from "../../components/ui/FabMenu";
+import BackLink from "../../components/ui/BackLink";
 import api from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
+import PageTransition from "../../components/layout/PageTransition";
 
 /**
  * CollectionPage
  *
+ * Owns BOTH tabs of a collection — Overview and Highlights — as views of
+ * this single page, switched via `?tab=highlights` on the collection's
+ * own URL (`/:username/:slug`). There is intentionally no separate
+ * "CollectionHighlightsPage" route: Highlights is just another tab here,
+ * exactly like Overview, so refresh/back/forward all behave like a
+ * normal query-param tab and navigating in from Overall Highlights lands
+ * squarely on this page with the Highlights tab pre-selected.
+ *
  * Identity header intentionally removed — it lives in the global Navbar now.
- * This page shows only: collection title + description, sync controls, contributions.
  */
 export default function CollectionPage() {
   const { username, slug } = useParams();
-  const { user, loading: authLoading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "highlights" ? "highlights" : "overview";
 
+  const { user, loading: authLoading } = useAuth();
   const isSelf = !authLoading && user?.username === username;
 
+  // Overview tab state
   const [collection, setCollection] = useState(null);
   const [contributions, setContributions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +46,15 @@ export default function CollectionPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
 
+  // Highlights tab state — fetched lazily (only once the tab is opened),
+  // kept separate from the Overview contributions list.
+  const [highlightContributions, setHighlightContributions] = useState([]);
+  const [highlightCollections, setHighlightCollections] = useState([]);
+  const [highlightsLoading, setHighlightsLoading] = useState(true);
+  const [highlightsLoaded, setHighlightsLoaded] = useState(false);
+  const [highlightOpenCardId, setHighlightOpenCardId] = useState(null);
+
+  // Collection header + Overview contributions.
   useEffect(() => {
     let cancelled = false;
 
@@ -56,10 +80,63 @@ export default function CollectionPage() {
     return () => { cancelled = true; };
   }, [username, slug]);
 
+  // Reset the Highlights tab's "already loaded" flag whenever the
+  // collection itself changes (e.g. switching Gssoc → SWoC while already
+  // on a Highlights tab), so the new collection's highlights get fetched.
+  useEffect(() => {
+    setHighlightsLoaded(false);
+  }, [username, slug]);
+
+  // Fetch Highlights tab data the first time it's opened for this collection.
+  useEffect(() => {
+    if (activeTab !== "highlights" || highlightsLoaded) return;
+    let cancelled = false;
+
+    const fetchHighlights = async () => {
+      setHighlightsLoading(true);
+      try {
+        const [highlightsRes, collectionsRes] = await Promise.all([
+          api.get(`/api/users/${username}/collections/${slug}/highlights`),
+          api.get(`/api/users/${username}/collections`),
+        ]);
+
+        if (!cancelled) {
+          setHighlightContributions(highlightsRes.data.contributions || []);
+          setHighlightCollections(collectionsRes.data || []);
+          setHighlightsLoaded(true);
+        }
+      } catch (err) {
+        console.error("Failed to fetch collection highlights:", err);
+      } finally {
+        if (!cancelled) setHighlightsLoading(false);
+      }
+    };
+
+    fetchHighlights();
+    return () => { cancelled = true; };
+  }, [activeTab, username, slug, highlightsLoaded]);
+
   const handleUpdated = (updatedPr) => {
     setContributions((prev) =>
       prev.map((c) => (c._id === updatedPr._id ? updatedPr : c))
     );
+  };
+
+  /**
+   * A contribution can be un-highlighted directly from the Star control
+   * on the card (via the existing Manage Highlight dialog). If it no
+   * longer qualifies for this collection's showcase, drop it; otherwise
+   * merge the updated fields in place.
+   */
+  const handleHighlightUpdated = (updatedPr) => {
+    setHighlightContributions((prev) => {
+      const stillQualifies = ["collection", "overall"].includes(updatedPr.highlightScope);
+      if (!stillQualifies) {
+        if (highlightOpenCardId === updatedPr._id) setHighlightOpenCardId(null);
+        return prev.filter((c) => c._id !== updatedPr._id);
+      }
+      return prev.map((c) => (c._id === updatedPr._id ? { ...c, ...updatedPr } : c));
+    });
   };
 
   const handleDeleted = (deletedId) => {
@@ -90,7 +167,20 @@ export default function CollectionPage() {
   if (authLoading) return null;
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8 space-y-8">
+    <div className="collection-theme mx-auto max-w-6xl px-6 py-8">
+      {/*
+        Page-entry transition wraps the actual page content only. The
+        fixed-position FabMenu and the two owner-only modals are kept as
+        SIBLINGS below, outside of it — an ancestor with an in-progress
+        `transform` (the page-entry animation animates translateY)
+        briefly becomes the containing block for `position: fixed`
+        descendants, which would make those overlays jump/misposition for
+        the ~180ms the transition runs. Keeping them outside avoids that.
+      */}
+      <PageTransition className="space-y-8">
+
+      {/* Back to the owning profile */}
+      <BackLink to={`/${username}`} label="Back to Profile" />
 
       {/* Collection header row */}
       {collection ? (
@@ -107,7 +197,7 @@ export default function CollectionPage() {
             )}
           </div>
 
-          {isSelf && (
+          {isSelf && activeTab === "overview" && (
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleSyncIssues}
@@ -128,67 +218,55 @@ export default function CollectionPage() {
         </div>
       )}
 
-      {/* Sync result banner */}
-      {syncResult && (
-        <div className="rounded-xl bg-violet-900/30 border border-violet-500/30 px-5 py-3 text-sm text-violet-200 flex items-center gap-3">
-          <RefreshCw className="w-4 h-4 shrink-0" />
-          <span>
-            Sync complete —{" "}
-            <strong>{syncResult.updated}</strong> updated,{" "}
-            <strong>{syncResult.skipped}</strong> already up to date
-            {syncResult.total > 0 &&
-              ` (${syncResult.total} total contributions)`}
-          </span>
-        </div>
+      {/* Overview | Highlights — both are views of THIS page */}
+      {collection && (
+        <CollectionSubNav username={username} slug={slug} active={activeTab} />
       )}
 
-      {/* Contributions */}
-      <div className="space-y-4 md:space-y-8">
-        {loading && (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 rounded-xl bg-gray-800/60 animate-pulse" />
-            ))}
-          </div>
-        )}
-
-        {!loading && contributions.length === 0 && (
-          <div className="rounded-xl border border-dashed border-white/[0.08] py-16 text-center">
-            <p className="text-gray-500 text-sm">No contributions yet.</p>
-            {isSelf && (
-              <p className="text-gray-600 text-xs mt-1">
-                Use "Add PR" or "Fetch GitHub PRs" to get started.
-              </p>
-            )}
-          </div>
-        )}
-
-        {!loading && contributions.length > 0 && (
-          <>
-            {/* Mobile */}
-            <div className="md:hidden space-y-4">
-              {contributions.map((c) => (
-                <PRCard
-                  key={c._id}
-                  pr={c}
-                  collectionSlug={collection?.slug}
-                  isSelf={isSelf}
-                  isOpen={openCardId === c._id}
-                  onToggle={() =>
-                    setOpenCardId(openCardId === c._id ? null : c._id)
-                  }
-                  onUpdated={handleUpdated}
-                  onDeleted={isSelf ? handleDeleted : undefined}
-                />
-              ))}
+      {activeTab === "overview" ? (
+        <>
+          {/* Sync result banner */}
+          {syncResult && (
+            <div className="rounded-xl bg-[#45101D]/40 border border-[#6A1B2E]/40 px-5 py-3 text-sm text-[#D9AAB4] flex items-center gap-3">
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span>
+                Sync complete —{" "}
+                <strong>{syncResult.updated}</strong> updated,{" "}
+                <strong>{syncResult.skipped}</strong> already up to date
+                {syncResult.total > 0 &&
+                  ` (${syncResult.total} total contributions)`}
+              </span>
             </div>
+          )}
 
-            {/* Desktop */}
-            <div className="hidden md:block">
-              <Timeline>
-                {contributions.map((c, index) => (
-                  <TimelineItem key={c._id} index={index}>
+          {/* Contributions */}
+          <div className="space-y-4 md:space-y-8">
+            {loading && (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-20 rounded-xl bg-gray-800/60 animate-pulse" />
+                ))}
+              </div>
+            )}
+
+            {!loading && contributions.length === 0 && (
+              <div className="rounded-xl border border-dashed border-white/[0.08] py-16 text-center">
+                <p className="text-gray-500 text-sm">No contributions yet.</p>
+                {isSelf && (
+                  <p className="text-gray-600 text-xs mt-1">
+                    Use "Add PR" or "Fetch GitHub PRs" to get started.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!loading && contributions.length > 0 && (
+              <>
+                {/* Mobile */}
+                <div className="md:hidden space-y-4">
+                  {contributions.map((c) => (
                     <PRCard
+                      key={c._id}
                       pr={c}
                       collectionSlug={collection?.slug}
                       isSelf={isSelf}
@@ -199,16 +277,109 @@ export default function CollectionPage() {
                       onUpdated={handleUpdated}
                       onDeleted={isSelf ? handleDeleted : undefined}
                     />
-                  </TimelineItem>
-                ))}
-              </Timeline>
-            </div>
-          </>
-        )}
-      </div>
+                  ))}
+                </div>
 
-      {/* Owner-only modals */}
-      {isSelf && open && (
+                {/* Desktop */}
+                <div className="hidden md:block">
+                  <Timeline>
+                    {contributions.map((c, index) => (
+                      <TimelineItem key={c._id} index={index}>
+                        <PRCard
+                          pr={c}
+                          collectionSlug={collection?.slug}
+                          isSelf={isSelf}
+                          isOpen={openCardId === c._id}
+                          onToggle={() =>
+                            setOpenCardId(openCardId === c._id ? null : c._id)
+                          }
+                          onUpdated={handleUpdated}
+                          onDeleted={isSelf ? handleDeleted : undefined}
+                        />
+                      </TimelineItem>
+                    ))}
+                  </Timeline>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <HighlightsNav
+            mode="collection"
+            username={username}
+            currentCollection={collection}
+            collections={highlightCollections}
+          />
+
+          <div className="space-y-4 md:space-y-8">
+            {highlightsLoading && (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-20 rounded-xl bg-gray-800/60 animate-pulse" />
+                ))}
+              </div>
+            )}
+
+            {!highlightsLoading && highlightContributions.length === 0 && (
+              <HighlightsEmptyState />
+            )}
+
+            {!highlightsLoading && highlightContributions.length > 0 && (
+              <>
+                {/* Mobile */}
+                <div className="md:hidden space-y-4">
+                  {highlightContributions.map((c) => (
+                    <PRCard
+                      key={c._id}
+                      pr={c}
+                      collectionSlug={collection?.slug}
+                      isSelf={isSelf}
+                      mode="showcase"
+                      isOpen={highlightOpenCardId === c._id}
+                      onToggle={() =>
+                        setHighlightOpenCardId(
+                          highlightOpenCardId === c._id ? null : c._id
+                        )
+                      }
+                      onUpdated={handleHighlightUpdated}
+                    />
+                  ))}
+                </div>
+
+                {/* Desktop */}
+                <div className="hidden md:block">
+                  <Timeline>
+                    {highlightContributions.map((c, index) => (
+                      <TimelineItem key={c._id} index={index}>
+                        <PRCard
+                          pr={c}
+                          collectionSlug={collection?.slug}
+                          isSelf={isSelf}
+                          mode="showcase"
+                          isOpen={highlightOpenCardId === c._id}
+                          onToggle={() =>
+                            setHighlightOpenCardId(
+                              highlightOpenCardId === c._id ? null : c._id
+                            )
+                          }
+                          onUpdated={handleHighlightUpdated}
+                        />
+                      </TimelineItem>
+                    ))}
+                  </Timeline>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      </PageTransition>
+
+      {/* Owner-only modals — Overview tab actions only */}
+      {isSelf && activeTab === "overview" && open && (
         <AddContributionModal
           collectionSlug={collection?.slug}
           onClose={() => setOpen(false)}
@@ -219,7 +390,7 @@ export default function CollectionPage() {
         />
       )}
 
-      {isSelf && openGitHub && (
+      {isSelf && activeTab === "overview" && openGitHub && (
         <AddGitHubPRModal
           collectionSlug={collection?.slug}
           onClose={() => setOpenGitHub(false)}
@@ -230,8 +401,8 @@ export default function CollectionPage() {
         />
       )}
 
-      {/* Owner-only FAB menu */}
-      {isSelf && (
+      {/* Owner-only FAB menu — Overview tab only (Add/Fetch PR actions) */}
+      {isSelf && activeTab === "overview" && (
         <FabMenu
           actions={[
             {

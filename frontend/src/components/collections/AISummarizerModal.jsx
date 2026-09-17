@@ -111,8 +111,8 @@ export default function AISummarizerModal({
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-800 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-violet-600/20">
-              <Sparkles className="w-4 h-4 text-violet-400" />
+            <div className="p-1.5 rounded-lg bg-[#6A1B2E]/20">
+              <Sparkles className="w-4 h-4 text-[#C48A97]" />
             </div>
             <div>
               <h2 className="text-base font-semibold text-white">AI Summarizer</h2>
@@ -128,7 +128,7 @@ export default function AISummarizerModal({
         </div>
 
         {/* ── Scrollable body ── */}
-        <div className="overflow-y-auto custom-scroll flex-1 px-6 py-5 space-y-5">
+        <div className="overflow-y-auto maroon-scroll flex-1 px-6 py-5 space-y-5">
 
           {/* Provider selector */}
           <fieldset>
@@ -143,7 +143,7 @@ export default function AISummarizerModal({
                   className={`
                     flex-1 py-2.5 text-sm font-medium transition-colors
                     ${provider === p
-                      ? "bg-violet-600 text-white"
+                      ? "bg-[#6A1B2E] text-white"
                       : "bg-gray-900 text-gray-400 hover:text-white hover:bg-gray-800"
                     }
                   `}
@@ -170,7 +170,7 @@ export default function AISummarizerModal({
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="gsk_..."
-                className="w-full h-10 px-3 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="w-full h-10 px-3 rounded-lg bg-gray-900 border border-gray-700 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#6A1B2E]"
               />
 
               {/* Remember API key checkbox */}
@@ -179,7 +179,7 @@ export default function AISummarizerModal({
                   type="checkbox"
                   checked={rememberKey}
                   onChange={(e) => setRememberKey(e.target.checked)}
-                  className="w-4 h-4 accent-violet-500 rounded"
+                  className="w-4 h-4 accent-[#6A1B2E] rounded"
                 />
                 <span className="text-xs text-gray-400">
                   Remember API key in this browser
@@ -202,7 +202,7 @@ export default function AISummarizerModal({
               onClick={() => setIncludeIssues((v) => !v)}
               className={`
                 relative shrink-0 w-10 h-5 rounded-full transition-colors duration-200
-                ${includeIssues ? "bg-violet-600" : "bg-gray-700"}
+                ${includeIssues ? "bg-[#6A1B2E]" : "bg-gray-700"}
               `}
               role="switch"
               aria-checked={includeIssues}
@@ -219,10 +219,10 @@ export default function AISummarizerModal({
 
           {/* ── Result preview ── */}
           {result && (
-            <div className="rounded-xl border border-violet-500/30 bg-violet-950/30 p-4 space-y-3">
+            <div className="rounded-xl border border-[#6A1B2E]/40 bg-[#2B0A10]/40 p-4 space-y-3">
               <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-violet-400" />
-                <span className="text-xs font-medium text-violet-400 uppercase tracking-wide">
+                <Sparkles className="w-3.5 h-3.5 text-[#C48A97]" />
+                <span className="text-xs font-medium text-[#C48A97] uppercase tracking-wide">
                   Generated Description
                 </span>
               </div>
@@ -249,7 +249,7 @@ export default function AISummarizerModal({
                       {result.skills.map((s) => (
                         <span
                           key={s}
-                          className="text-xs px-2 py-0.5 rounded-full bg-violet-900/50 border border-violet-500/30 text-violet-300"
+                          className="text-xs px-2 py-0.5 rounded-full bg-[#45101D]/60 border border-[#6A1B2E]/40 text-[#D9AAB4]"
                         >
                           {s}
                         </span>
@@ -266,7 +266,7 @@ export default function AISummarizerModal({
                   disabled={saving}
                   className="
                     flex-1 py-2 rounded-xl
-                    bg-violet-600 hover:bg-violet-500
+                    bg-[#6A1B2E] hover:bg-[#7D2438]
                     disabled:opacity-60
                     text-white text-sm font-medium transition-colors
                   "
@@ -298,10 +298,10 @@ export default function AISummarizerModal({
               disabled={generating || (provider === "personal" && !apiKey.trim())}
               className="
                 w-full py-3 rounded-xl font-semibold text-sm
-                bg-gradient-to-r from-violet-600 to-purple-600
-                hover:from-violet-500 hover:to-purple-500
+                bg-gradient-to-r from-[#6A1B2E] to-[#5A1627]
+                hover:from-[#7D2438] hover:to-[#6A1B2E]
                 disabled:opacity-50 disabled:cursor-not-allowed
-                text-white shadow-lg shadow-violet-900/40
+                text-white shadow-lg shadow-[#45101D]/40
                 transition-all flex items-center justify-center gap-2
               "
             >

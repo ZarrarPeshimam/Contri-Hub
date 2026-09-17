@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 const TABS = [
   { id: "collections", label: "Collections" },
   { id: "activity", label: "Activity" },
+  { id: "highlights", label: "Highlights" },
 ];
 
 export default function ProfileTabs({ active, onChange }) {
