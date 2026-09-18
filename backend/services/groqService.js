@@ -14,9 +14,14 @@ import axios from "axios";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 // Groq deprecated "llama-3.3-70b-versatile" (decommissioned Aug 16, 2026 for
 // Free/Developer tier usage — see https://console.groq.com/docs/deprecations).
-// Groq's recommended replacement is "openai/gpt-oss-120b". Configurable via
-// GROQ_MODEL so future Groq deprecations don't require another code change.
+// Groq's recommended replacements are "openai/gpt-oss-120b" and
+// "qwen/qwen3.6-27b". Both are configurable via env vars so future Groq
+// deprecations don't require another code change.
 const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+// If the primary model is unavailable (decommissioned, temporarily down,
+// etc.) we automatically retry once against this fallback model before
+// giving up, so a single model's outage doesn't take the feature down.
+const FALLBACK_MODEL = process.env.GROQ_FALLBACK_MODEL || "qwen/qwen3.6-27b";
 
 /**
  * Builds the prompt sent to the LLM.
@@ -95,6 +100,43 @@ function extractSkills(summary) {
 }
 
 /**
+ * Posts a single completion request to Groq for the given model.
+ * Left as a thin, reusable helper so generateSummary can call it once for
+ * the primary model and, on failure, once more for the fallback model
+ * without duplicating the request setup.
+ *
+ * @param {{ model: string, prompt: string, key: string }} params
+ */
+async function callGroq({ model, prompt, key }) {
+  return axios.post(
+    GROQ_API_URL,
+    {
+      model,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.4,
+      max_tokens: 400, // bumped slightly to accommodate 4-8 sentence output
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 30000,
+    }
+  );
+}
+
+/**
+ * True if this failure is specific to the API key or account (bad key,
+ * rate limit) rather than the model itself — retrying with a different
+ * model would not help, so these should fail fast instead of burning a
+ * second request against the fallback model.
+ */
+function isKeyOrRateLimitError(err) {
+  return err.response?.status === 401 || err.response?.status === 429;
+}
+
+/**
  * Calls Groq and returns a structured result.
  *
  * @param {{ prTitle, prBody, linkedIssues, apiKey? }} params
@@ -113,33 +155,20 @@ export async function generateSummary({ prTitle, prBody, linkedIssues, apiKey })
 
   let response;
   try {
-    response = await axios.post(
-      GROQ_API_URL,
-      {
-        model: MODEL,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.4,
-        max_tokens: 400, // bumped slightly to accommodate 4-8 sentence output
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 30000,
-      }
-    );
-  } catch (err) {
-    if (err.response?.status === 401) {
-      throw new Error("Invalid Groq API key. Check your key and try again.");
+    response = await callGroq({ model: MODEL, prompt, key });
+  } catch (primaryErr) {
+    if (isKeyOrRateLimitError(primaryErr)) {
+      throw mapGroqError(primaryErr);
     }
-    if (err.response?.status === 429) {
-      throw new Error("Groq API rate limit reached. Try again in a moment.");
+
+    // Primary model failed for a reason a different model might not hit
+    // (e.g. decommissioned, temporarily overloaded) — retry once against
+    // the fallback model before giving up.
+    try {
+      response = await callGroq({ model: FALLBACK_MODEL, prompt, key });
+    } catch (fallbackErr) {
+      throw mapGroqError(fallbackErr);
     }
-    if (err.code === "ECONNABORTED") {
-      throw new Error("Groq API timed out. Try again.");
-    }
-    throw new Error(`Groq API error: ${err.response?.data?.error?.message ?? err.message}`);
   }
 
   const summary = response.data.choices?.[0]?.message?.content?.trim() ?? "";
@@ -153,4 +182,21 @@ export async function generateSummary({ prTitle, prBody, linkedIssues, apiKey })
     skills: extractSkills(summary),
     impact: summary.split(".")[0].trim() + ".",
   };
+}
+
+/**
+ * Translates a raw axios/Groq error into the user-facing message shown in
+ * the UI. Shared by both the primary and fallback call sites.
+ */
+function mapGroqError(err) {
+  if (err.response?.status === 401) {
+    return new Error("Invalid Groq API key. Check your key and try again.");
+  }
+  if (err.response?.status === 429) {
+    return new Error("Groq API rate limit reached. Try again in a moment.");
+  }
+  if (err.code === "ECONNABORTED") {
+    return new Error("Groq API timed out. Try again.");
+  }
+  return new Error(`Groq API error: ${err.response?.data?.error?.message ?? err.message}`);
 }
