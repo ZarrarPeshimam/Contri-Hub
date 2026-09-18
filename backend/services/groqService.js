@@ -12,7 +12,11 @@
 import axios from "axios";
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = "llama-3.3-70b-versatile";
+// Groq deprecated "llama-3.3-70b-versatile" (decommissioned Aug 16, 2026 for
+// Free/Developer tier usage — see https://console.groq.com/docs/deprecations).
+// Groq's recommended replacement is "openai/gpt-oss-120b". Configurable via
+// GROQ_MODEL so future Groq deprecations don't require another code change.
+const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 /**
  * Builds the prompt sent to the LLM.
