@@ -303,11 +303,18 @@ router.post("/:slug/add-from-github", auth, async (req, res) => {
     const shouldDetect = dbUser?.settings?.autoDetectIssues !== false;
     const shouldAI     = dbUser?.settings?.autoAISummary     === true;
     const created = [];
+    let duplicateCount = 0;
+    let invalidCount = 0;
+    let failedCount = 0;
 
     for (const pr of finalPRs) {
       try {
         const parsed = parseGitHubPR(pr.url);
-        if (!parsed) continue;
+        if (!parsed) {
+          invalidCount++;
+          console.warn(`[AddFromGitHub] Skipped — could not parse PR URL: ${pr.url}`);
+          continue;
+        }
 
         const linkedIssues = shouldDetect
           ? (pr.linkedIssues?.length
@@ -342,7 +349,12 @@ router.post("/:slug/add-from-github", auth, async (req, res) => {
           url: pr.url,
           repo: parsed.repo,
           prNumber: parsed.prNumber,
-          status: pr.mergedAt ? "merged" : "open",
+          // Previously this was `pr.mergedAt ? "merged" : "open"`, which could
+          // never produce "closed" — even though this route's whole entry
+          // point (fetchGitHubPRs) specifically searches `state:closed`
+          // PRs, meaning most/all incoming PRs here are closed-but-maybe-
+          // not-merged, and were being mislabeled "open".
+          status: pr.mergedAt ? "merged" : pr.state === "closed" ? "closed" : "open",
           createdAtGithub: pr.createdAt,
           mergedAtGithub:  pr.mergedAt || undefined,
           user: req.userId,
@@ -353,12 +365,34 @@ router.post("/:slug/add-from-github", auth, async (req, res) => {
 
         created.push(newContribution);
       } catch (err) {
-        if (err.code === 11000) continue;
-        throw err;
+        if (err.code === 11000) {
+          // Duplicate on the { repo, prNumber } unique index — this PR is
+          // already stored. Previously this was silently swallowed with no
+          // logging at all, which is indistinguishable from "nothing
+          // matched" or a real failure. Log it and count it so both the
+          // server logs and the API response make this visible.
+          duplicateCount++;
+          console.warn(`[AddFromGitHub] Skipped duplicate — already exists: ${pr.url}`);
+          continue;
+        }
+        failedCount++;
+        console.error(`[AddFromGitHub] Failed to create contribution for ${pr.url}:`, err.message);
       }
     }
 
-    res.status(201).json({ added: created.length, contributions: created });
+    console.log(
+      `[AddFromGitHub] fetched=${finalPRs.length} added=${created.length} ` +
+      `duplicates=${duplicateCount} invalidUrl=${invalidCount} failed=${failedCount}`
+    );
+
+    res.status(201).json({
+      added: created.length,
+      fetchedCount: finalPRs.length,
+      duplicateCount,
+      invalidCount,
+      failedCount,
+      contributions: created,
+    });
   } catch (err) {
     console.error("Add PRs error:", err.message);
     res.status(500).json({ message: "Failed to add PRs" });

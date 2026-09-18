@@ -91,6 +91,18 @@ const contributionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-contributionSchema.index({ repo: 1, prNumber: 1 }, { unique: true });
+/**
+ * Uniqueness is scoped to the user: the same GitHub PR can legitimately
+ * be added by different ContriHub accounts (e.g. two contributors
+ * cross-referencing the same open-source PR in their own portfolios).
+ * What must never happen is the SAME user adding the SAME PR twice.
+ *
+ * Previously this was { repo: 1, prNumber: 1 } with no `user` — a
+ * GLOBAL unique constraint that blocked a second user from ever adding
+ * a PR another user had already added, causing every fetch to be
+ * silently skipped as a "duplicate" for anyone but the first person
+ * who added it.
+ */
+contributionSchema.index({ user: 1, repo: 1, prNumber: 1 }, { unique: true });
 
 export default mongoose.model("Contribution", contributionSchema);

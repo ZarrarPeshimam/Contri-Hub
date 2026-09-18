@@ -6,6 +6,7 @@ export default function AddGitHubPRModal({ collectionSlug, onClose, onFetched })
   const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
 
   const addTag = () => {
     const t = tagInput.trim();
@@ -36,13 +37,14 @@ export default function AddGitHubPRModal({ collectionSlug, onClose, onFetched })
 
   const submit = async (e) => {
     e.preventDefault();
-    
+
     const finalTags = getAllTags();
     if (finalTags.length === 0) {
       return setError("Add at least one tag");
     }
 
     setError("");
+    setInfo("");
     setLoading(true);
 
     try {
@@ -50,8 +52,25 @@ export default function AddGitHubPRModal({ collectionSlug, onClose, onFetched })
         tags: finalTags
       });
 
-      onFetched(res.data.contributions);
-      onClose();
+      const { added, fetchedCount, duplicateCount, contributions } = res.data;
+
+      if (added > 0) {
+        onFetched(contributions);
+      }
+
+      if (fetchedCount === 0) {
+        // GitHub search returned nothing for these labels — not an error,
+        // just nothing to add. Keep the modal open so the user can see
+        // this instead of it silently closing with no feedback.
+        setInfo("No closed PRs found on GitHub matching those labels.");
+      } else if (added === 0 && duplicateCount > 0) {
+        setInfo(
+          `All ${fetchedCount} matching PR${fetchedCount === 1 ? "" : "s"} ` +
+          `${duplicateCount === 1 ? "is" : "are"} already in this collection.`
+        );
+      } else if (added > 0) {
+        onClose();
+      }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to fetch PRs");
     } finally {
@@ -111,6 +130,7 @@ export default function AddGitHubPRModal({ collectionSlug, onClose, onFetched })
           )}
 
           {error && <p className="text-sm text-red-400">{error}</p>}
+          {info && <p className="text-sm text-gray-400">{info}</p>}
 
           <div className="flex justify-end gap-3 pt-4">
             <button
