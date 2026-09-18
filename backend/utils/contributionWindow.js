@@ -28,12 +28,24 @@ export async function getContributionYears(userId) {
  * mean" — used by BOTH the heatmap and the trend graph so the two views
  * can never drift apart:
  *
- *   - No year requested, or the requested year is the newest year that
- *     actually has data: rolling 365-day window ending "now" (real
- *     today, not year-end). This is what makes the current/newest year
+ *   - The requested year IS the actual current calendar year (real
+ *     "now", UTC — never derived from contribution data): rolling
+ *     365-day window ending "now". This is what makes the current year
  *     behave like a live trailing window instead of stopping at Dec 31.
- *   - Any other (older, completed) year: the full calendar year,
- *     Jan 1 00:00:00 UTC → Dec 31 23:59:59.999 UTC.
+ *   - Any other year — including the newest year that happens to have
+ *     data, if that year is NOT the actual current calendar year (e.g.
+ *     no contributions yet this year, so the newest data is last year):
+ *     the full calendar year, Jan 1 00:00:00 UTC → Dec 31 23:59:59.999
+ *     UTC.
+ *
+ * Whether a year "counts" as current is intentionally never inferred
+ * from the data (latest contribution date, newest year with activity,
+ * etc.) — only from the real clock. A year with zero contributions
+ * still correctly gets the rolling window if it IS the current
+ * calendar year (so the page has sensible current-year behavior even
+ * for a brand-new user with no activity at all), and a year with the
+ * most recent activity still correctly gets a plain Jan-Dec window if
+ * it is NOT the current calendar year.
  *
  * Returns { year, startDate, endDate } where startDate/endDate are Date
  * objects (UTC) ready to drop straight into a Mongo $match.
@@ -42,11 +54,16 @@ export async function getContributionWindow(userId, requestedYear) {
   const years = await getContributionYears(userId);
   const newestYear = years[0] ?? null;
 
-  const year = Number.isInteger(requestedYear) ? requestedYear : newestYear;
+  // Real calendar "now" — the only thing allowed to define "current year".
+  const currentCalendarYear = new Date().getUTCFullYear();
+
+  const year = Number.isInteger(requestedYear)
+    ? requestedYear
+    : newestYear ?? currentCalendarYear;
 
   let startDate, endDate;
 
-  if (!year || year === newestYear) {
+  if (year === currentCalendarYear) {
     endDate = new Date();
     endDate.setUTCHours(23, 59, 59, 999);
 

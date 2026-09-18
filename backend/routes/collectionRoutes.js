@@ -183,6 +183,105 @@ router.put("/reorder", auth, async (req, res) => {
 });
 
 /* =========================
+   UPDATE COLLECTION
+   PUT /api/collections/:slug
+
+   Currently only supports updating `description` — this is specifically
+   to let the owner add/edit a description on a collection that may have
+   been created without one. Intentionally does not touch title/year/slug
+   to avoid introducing unrelated collection-editing surface area.
+
+   Declared AFTER /settings and /reorder (see note on those routes above)
+   so those literal paths are never swallowed by this ":slug" pattern,
+   but BEFORE the deeper "/:slug/..." routes since path depth already
+   disambiguates those regardless of order.
+
+   Ownership: findOneAndUpdate is scoped to { slug, user: req.userId },
+   the same pattern used by every other route in this file — a request
+   for a collection that isn't the caller's simply matches nothing and
+   404s, so this can't be used to edit another user's collection.
+========================= */
+router.put("/:slug", auth, async (req, res) => {
+  try {
+    const { description } = req.body;
+
+    if (typeof description !== "string") {
+      return res.status(400).json({ message: "Description must be a string" });
+    }
+
+    const collection = await Collection.findOneAndUpdate(
+      { slug: req.params.slug, user: req.userId },
+      { $set: { description } },
+      { new: true, runValidators: true }
+    );
+
+    if (!collection)
+      return res.status(404).json({ message: "Collection not found or unauthorized" });
+
+    res.json(collection);
+  } catch (err) {
+    console.error("Update collection error:", err);
+    res.status(500).json({ message: "Failed to update collection" });
+  }
+});
+
+/* =========================
+   DELETE COLLECTION
+   DELETE /api/collections/:slug
+
+   Deletes the collection AND every Contribution document that belongs
+   to it. Ownership is enforced the same way as every other route here —
+   scoped to { slug, user: req.userId } — so this can never be used to
+   delete another user's collection or contributions, even via a direct
+   API request.
+
+   Order of operations: contributions are deleted BEFORE the collection
+   document itself. If the process fails partway through, the worst case
+   is an empty collection that still exists (safe, visible, re-deletable)
+   rather than orphaned Contribution documents pointing at a collectionId
+   that no longer exists. This project has no existing Mongoose
+   transaction/session pattern to reuse, so this ordering is the
+   consistent-with-the-rest-of-the-codebase way to avoid orphans without
+   introducing one just for this feature.
+
+   Highlight handling: highlightScope lives directly on each Contribution
+   document — there is no separate highlight collection/model. Deleting
+   these Contribution rows therefore naturally removes BOTH
+   "collection"-scoped and "overall"-scoped highlight status for the
+   contributions in THIS collection, because the underlying document
+   (the only place that status is stored) is gone. There is nothing
+   further to clean up, and nothing to introduce. Deletion is scoped to
+   this collection's _id, so highlighted contributions belonging to any
+   other collection (collection- or overall-scoped) are completely
+   untouched.
+
+   This never touches GitHub — only the local ContriHub records.
+========================= */
+router.delete("/:slug", auth, async (req, res) => {
+  try {
+    const collection = await Collection.findOne({
+      slug: req.params.slug,
+      user: req.userId,
+    });
+
+    if (!collection)
+      return res.status(404).json({ message: "Collection not found or unauthorized" });
+
+    await Contribution.deleteMany({
+      collectionId: collection._id,
+      user: req.userId,
+    });
+
+    await Collection.deleteOne({ _id: collection._id, user: req.userId });
+
+    res.json({ message: "Collection deleted successfully" });
+  } catch (err) {
+    console.error("Delete collection error:", err);
+    res.status(500).json({ message: "Failed to delete collection" });
+  }
+});
+
+/* =========================
    ADD CONTRIBUTION
    POST /api/collections/:slug/contributions
 ========================= */

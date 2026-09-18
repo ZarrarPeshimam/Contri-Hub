@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
-import { RefreshCw, Github, GitPullRequest } from "lucide-react";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { RefreshCw, Github, GitPullRequest, Pencil } from "lucide-react";
 import AddContributionModal from "../../components/cards/AddContributionModal";
 import AddGitHubPRModal from "../../components/cards/AddGitHubPRModal";
+import EditCollectionModal from "../../components/collections/EditCollectionModal";
 import Timeline from "../../components/collections/Timeline";
 import TimelineItem from "../../components/collections/TimelineItem";
 import PRCard from "../../components/collections/PRCard";
@@ -11,6 +12,7 @@ import HighlightsNav from "../../components/highlights/HighlightsNav";
 import HighlightsEmptyState from "../../components/highlights/HighlightsEmptyState";
 import FabMenu from "../../components/ui/FabMenu";
 import BackLink from "../../components/ui/BackLink";
+import { useToast, ToastContainer } from "../../components/ui/Toast";
 import api from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
 import PageTransition from "../../components/layout/PageTransition";
@@ -30,6 +32,7 @@ import PageTransition from "../../components/layout/PageTransition";
  */
 export default function CollectionPage() {
   const { username, slug } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") === "highlights" ? "highlights" : "overview";
 
@@ -42,9 +45,11 @@ export default function CollectionPage() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [openGitHub, setOpenGitHub] = useState(false);
+  const [openEditCollection, setOpenEditCollection] = useState(false);
   const [openCardId, setOpenCardId] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
+  const { toasts, showToast, dismiss } = useToast();
 
   // Highlights tab state — fetched lazily (only once the tab is opened),
   // kept separate from the Overview contributions list.
@@ -144,6 +149,19 @@ export default function CollectionPage() {
     if (openCardId === deletedId) setOpenCardId(null);
   };
 
+  const handleCollectionUpdated = (updatedCollection) => {
+    setCollection((prev) => (prev ? { ...prev, ...updatedCollection } : updatedCollection));
+  };
+
+  /**
+   * Collection + all its contributions have already been deleted on the
+   * server (cascade handled backend-side). Nothing left to render here —
+   * just get the owner off this page and back to their collections.
+   */
+  const handleCollectionDeleted = () => {
+    navigate(`/${username}`);
+  };
+
   const handleSyncIssues = async () => {
     setSyncing(true);
     setSyncResult(null);
@@ -199,6 +217,14 @@ export default function CollectionPage() {
 
           {isSelf && activeTab === "overview" && (
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setOpenEditCollection(true)}
+                title="Edit collection description, or delete this collection"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm text-gray-300 hover:text-white transition-colors border border-white/[0.06]"
+              >
+                <Pencil className="w-4 h-4" />
+                Edit Collection
+              </button>
               <button
                 onClick={handleSyncIssues}
                 disabled={syncing}
@@ -397,7 +423,22 @@ export default function CollectionPage() {
           onFetched={(newContributions) => {
             setContributions((prev) => [...newContributions, ...prev]);
             setOpenGitHub(false);
+            const n = newContributions.length;
+            showToast(
+              `${n} contribution${n === 1 ? "" : "s"} added`,
+              "success"
+            );
           }}
+        />
+      )}
+
+      {isSelf && activeTab === "overview" && openEditCollection && collection && (
+        <EditCollectionModal
+          collection={collection}
+          onClose={() => setOpenEditCollection(false)}
+          onUpdated={handleCollectionUpdated}
+          onDeleted={handleCollectionDeleted}
+          showToast={showToast}
         />
       )}
 
@@ -418,6 +459,8 @@ export default function CollectionPage() {
           ]}
         />
       )}
+
+      <ToastContainer toasts={toasts} dismiss={dismiss} position="bottom-right" />
     </div>
   );
 }

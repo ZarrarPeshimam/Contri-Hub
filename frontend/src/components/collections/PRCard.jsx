@@ -1,6 +1,6 @@
 import { useState } from "react";
 import api from "../../lib/api";
-import { Edit2, Trash2, ExternalLink, GitBranch, Sparkles, Link2, Loader2, Star } from "lucide-react";
+import { Edit2, Trash2, ExternalLink, GitBranch, Sparkles, RefreshCw, Star } from "lucide-react";
 import { cleanMarkdown } from "../../lib/github";
 import LinkedIssuesEditor from "./LinkedIssuesEditor";
 import AISummarizerModal from "./AISummarizerModal";
@@ -151,17 +151,14 @@ export default function PRCard({
                   <Edit2 className="w-4 h-4" />
                 </button>
 
-                {/* Sync Issues */}
+                                {/* Sync Issues */}
                 <button
                   onClick={handleSyncIssues}
                   disabled={syncing}
                   className="p-2 bg-gray-900/90 hover:bg-cyan-600 rounded-lg text-white transition-colors disabled:opacity-50"
                   title="Re-scan PR for linked issue references"
                 >
-                  {syncing
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Link2 className="w-4 h-4" />
-                  }
+                  <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
                 </button>
               </>
             )}

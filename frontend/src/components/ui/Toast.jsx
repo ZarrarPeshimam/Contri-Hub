@@ -11,6 +11,8 @@
  *
  *   // In JSX:
  *   <ToastContainer toasts={toasts} dismiss={dismiss} />
+ *   // or, for a bottom-right placement:
+ *   <ToastContainer toasts={toasts} dismiss={dismiss} position="bottom-right" />
  *
  * Toast types: "success" | "error" | "info"
  * Auto-dismisses after 4 s.
@@ -41,10 +43,16 @@ export function useToast() {
 
 /* ── Container ── */
 
-export function ToastContainer({ toasts, dismiss }) {
+const POSITION_CLASSES = {
+  "bottom-center": "bottom-6 left-1/2 -translate-x-1/2 items-center",
+  "bottom-right":  "bottom-6 right-6 items-end",
+};
+
+export function ToastContainer({ toasts, dismiss, position = "bottom-center" }) {
   if (!toasts.length) return null;
+  const posClass = POSITION_CLASSES[position] ?? POSITION_CLASSES["bottom-center"];
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 items-center pointer-events-none">
+    <div className={`fixed z-[100] flex flex-col gap-2 pointer-events-none ${posClass}`}>
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} onDismiss={dismiss} />
       ))}

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
     <div className="min-h-screen w-full bg-gray-950 text-white flex">
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden border-r border-white/[0.06]">
+      <div className="hidden lg:flex lg:w-1/2 lg:sticky lg:top-0 lg:h-screen lg:self-start overflow-hidden border-r border-white/[0.06]">
         <div className="absolute inset-0 bg-gradient-to-br from-amber-950/40 via-gray-950 to-gray-950" />
         <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-amber-500/10 blur-3xl" />
         <div className="absolute bottom-0 right-0 w-[28rem] h-[28rem] rounded-full bg-orange-500/10 blur-3xl" />
@@ -25,7 +25,7 @@ export default function AuthLayout({ title, subtitle, children, footer }) {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
-            className="max-w-md space-y-8"
+            className="max-w-md space-y-8 mt-4"
           >
             <div className="space-y-4">
               <h1 className="text-4xl xl:text-[2.75rem] font-bold leading-[1.1] tracking-tight text-white">
