@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Settings } from "lucide-react";
 import api from "../lib/api";
 import { useAuth } from "../hooks/useAuth";
+import BackLink from "../components/ui/BackLink";
 
 /**
  * SettingsPage
@@ -10,7 +11,10 @@ import { useAuth } from "../hooks/useAuth";
  * 1. Profile — identity fields (displayName, bio, social links, avatarUrl)
  * 2. Behavior — existing toggle settings
  *
- * Back navigation is handled by the Navbar (logo click → profile).
+ * Back navigation: a BackLink to the user's own profile near the top of
+ * the page, same component/pattern used on Collection pages. Relying on
+ * the Navbar logo alone (the previous approach) left no way back once
+ * the person had already saved and had nowhere obvious to go next.
  */
 export default function SettingsPage() {
   const { user, login } = useAuth();
@@ -96,6 +100,8 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10 space-y-10">
+
+      <BackLink to={user ? `/${user.username}` : "/"} label="Back to Profile" />
 
       {/* Page header */}
       <div className="flex items-center gap-2">
