@@ -10,7 +10,7 @@ const collectionSchema = new mongoose.Schema(
 
     year: {
       type: Number,
-      required: true,
+      required: false,
     },
 
     description: {

@@ -72,16 +72,25 @@ async function withLiveCounts(collections) {
 router.post("/", auth, async (req, res) => {
   try {
     const { title, year, description } = req.body;
-    if (!title || !year)
-      return res.status(400).json({ message: "Title and year required" });
+    if (!title)
+      return res.status(400).json({ message: "Title required" });
 
-    const slug = `${title}-${year}`
+    // Year is optional. Only treat it as provided when it's a real,
+    // non-empty value that parses to a valid number — an empty string
+    // from the form (or anything that isn't a number) means "no year",
+    // not year 0 / NaN.
+    const hasYear =
+      year !== undefined && year !== null && year !== "" && !Number.isNaN(Number(year));
+    const parsedYear = hasYear ? Number(year) : undefined;
+
+    const slugSource = hasYear ? `${title}-${parsedYear}` : title;
+    const slug = slugSource
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
 
     const collection = await Collection.create({
-      title, year, description, slug,
+      title, year: parsedYear, description, slug,
       contributionsCount: 0,
       user: req.userId,
     });
@@ -89,7 +98,7 @@ router.post("/", auth, async (req, res) => {
     res.status(201).json(collection);
   } catch (err) {
     if (err.code === 11000)
-      return res.status(400).json({ message: "Collection already exists for this year" });
+      return res.status(400).json({ message: "A collection with this name already exists" });
     console.error("Create collection error:", err);
     res.status(500).json({ message: "Server error" });
   }
@@ -360,7 +369,11 @@ router.post("/:slug/fetch-github-prs", auth, async (req, res) => {
     return res.status(400).json({ message: "GitHub username not set" });
 
   try {
-    const prs = await fetchGitHubPRs(dbUser.githubUsername, tags);
+    const collection = await Collection.findOne({ user: req.userId, slug: req.params.slug });
+    if (!collection) return res.status(404).json({ message: "Collection not found" });
+
+    // collection.year is optional; when unset the fetch is unrestricted.
+    const prs = await fetchGitHubPRs(dbUser.githubUsername, tags, collection.year);
     return res.json({ fetchedCount: prs.length, prs });
   } catch (err) {
     console.error("GitHub fetch error:", err.message);
@@ -394,7 +407,7 @@ router.post("/:slug/add-from-github", auth, async (req, res) => {
     if (prs && prs.length > 0) {
       finalPRs = prs;
     } else if (tags && tags.length > 0) {
-      finalPRs = await fetchGitHubPRs(dbUser.githubUsername, tags);
+      finalPRs = await fetchGitHubPRs(dbUser.githubUsername, tags, collection.year);
     } else {
       return res.status(400).json({ message: "Provide either prs or tags" });
     }

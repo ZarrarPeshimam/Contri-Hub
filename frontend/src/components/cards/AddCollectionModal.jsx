@@ -17,11 +17,18 @@ export default function AddCollectionModal({ onClose, onCreated }) {
     setLoading(true);
 
     try {
-      const res = await api.post("/api/collections", {
+      const trimmedYear = form.year.toString().trim();
+      const payload = {
         title: form.title,
-        year: Number(form.year),
         description: form.description,
-      });
+      };
+      // Year is optional — only include it when the field actually has a
+      // value, so an empty field never sends year: 0 / NaN.
+      if (trimmedYear !== "") {
+        payload.year = Number(trimmedYear);
+      }
+
+      const res = await api.post("/api/collections", payload);
 
       onCreated?.(res.data);
       onClose();
@@ -74,14 +81,14 @@ export default function AddCollectionModal({ onClose, onCreated }) {
             required
           />
 
-          {/* Year */}
+          {/* Year (optional) */}
           <input
             type="number"
             value={form.year}
             onChange={(e) =>
               setForm({ ...form, year: e.target.value })
             }
-            placeholder="Year (e.g. 2025)"
+            placeholder="Year (optional, e.g. 2025)"
             className="
               w-full h-11 px-3
               rounded-lg
@@ -92,7 +99,6 @@ export default function AddCollectionModal({ onClose, onCreated }) {
               focus:outline-none
               focus:ring-2 focus:ring-amber-500
             "
-            required
           />
 
           {/* Description */}

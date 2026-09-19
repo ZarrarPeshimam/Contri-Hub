@@ -51,17 +51,48 @@ function buildLabelClause(tags) {
 }
 
 /**
- * Builds the full search query for "closed PRs authored by this user
- * that have ANY of the given labels".
+ * Builds the optional `created:` date-range qualifier for a collection's
+ * year, e.g. year 2026 -> `created:2026-01-01..2026-12-31`.
+ *
+ * `created` is the PR-creation date, which is the same field this app
+ * stores as `createdAtGithub` and uses for the heatmap / trend graph, so
+ * "which year does this PR belong to" means the same thing everywhere.
+ *
+ * GitHub's `A..B` range is inclusive on both ends, and a date-only bound
+ * covers the whole day, so `..2026-12-31` includes everything up to the end
+ * of Dec 31 (UTC).
+ *
+ * Returns null when there is no usable year (undefined / null / "" / NaN /
+ * non-integer), so callers fall through to the normal unrestricted search.
+ * No default year is ever applied.
  */
-function buildSearchQuery(githubUsername, tags) {
-  return [
+function buildYearClause(year) {
+  if (year === undefined || year === null || year === "") return null;
+
+  const y = Number(year);
+  if (!Number.isInteger(y) || y < 1000 || y > 9999) return null;
+
+  return `created:${y}-01-01..${y}-12-31`;
+}
+
+/**
+ * Builds the full search query for "closed PRs authored by this user
+ * that have ANY of the given labels" — and, when the collection has a
+ * year, created within that calendar year.
+ */
+function buildSearchQuery(githubUsername, tags, year) {
+  const clauses = [
     `author:${githubUsername}`,
     "is:pr",
     "state:closed",
     "archived:false",
     buildLabelClause(tags),
-  ].join(" ");
+  ];
+
+  const yearClause = buildYearClause(year);
+  if (yearClause) clauses.push(yearClause);
+
+  return clauses.join(" ");
 }
 
 /**
@@ -78,13 +109,16 @@ function buildSearchQuery(githubUsername, tags) {
  *
  * @param {string}   githubUsername
  * @param {string[]} tags  - GitHub label names to search for (ANY match)
+ * @param {number} [year]  - Optional collection year. When set, only PRs
+ *                           created Jan 1 – Dec 31 of that year are
+ *                           searched. When omitted/blank, no date filter.
  * @returns {Promise<NormalizedPR[]>}
  */
-export const fetchGitHubPRs = async (githubUsername, tags) => {
+export const fetchGitHubPRs = async (githubUsername, tags, year) => {
   const cleanTags = (tags || []).map((t) => String(t).trim()).filter(Boolean);
   if (cleanTags.length === 0) return [];
 
-  const q = buildSearchQuery(githubUsername, cleanTags);
+  const q = buildSearchQuery(githubUsername, cleanTags, year);
 
   console.log("[fetchGitHubPRs] username:", githubUsername);
   console.log("[fetchGitHubPRs] tags:", cleanTags);
