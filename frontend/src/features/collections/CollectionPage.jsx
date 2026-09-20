@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { RefreshCw, Github, GitPullRequest, Pencil } from "lucide-react";
 import AddContributionModal from "../../components/cards/AddContributionModal";
 import AddGitHubPRModal from "../../components/cards/AddGitHubPRModal";
 import EditCollectionModal from "../../components/collections/EditCollectionModal";
-import Timeline from "../../components/collections/Timeline";
-import TimelineItem from "../../components/collections/TimelineItem";
+import {
+  DraggableTimeline,
+  DraggableCardList,
+} from "../../components/collections/DraggableContributions";
 import PRCard from "../../components/collections/PRCard";
 import CollectionSubNav from "../../components/collections/CollectionSubNav";
 import HighlightsNav from "../../components/highlights/HighlightsNav";
@@ -14,7 +16,9 @@ import FabMenu from "../../components/ui/FabMenu";
 import BackLink from "../../components/ui/BackLink";
 import { useToast, ToastContainer } from "../../components/ui/Toast";
 import api from "../../lib/api";
+import { addNewContributions } from "../../lib/contributionOrder";
 import { useAuth } from "../../hooks/useAuth";
+import useSaveOrder from "../../hooks/useSaveOrder";
 import PageTransition from "../../components/layout/PageTransition";
 
 /**
@@ -182,6 +186,53 @@ export default function CollectionPage() {
     }
   };
 
+  // Owner-only manual ordering. Two independent lists, two endpoints, two
+  // order fields — reordering one never touches the other.
+  const handleOrderError = useCallback(
+    () => showToast("Failed to save order. Changes reverted.", "error"),
+    [showToast]
+  );
+
+  const saveContributionOrder = useSaveOrder({
+    endpoint: `/api/collections/${slug}/contributions/reorder`,
+    orderField: "collectionOrder",
+    setItems: setContributions,
+    onError: handleOrderError,
+  });
+
+  const saveHighlightOrder = useSaveOrder({
+    endpoint: `/api/collections/${slug}/highlights/reorder`,
+    orderField: "collectionHighlightOrder",
+    setItems: setHighlightContributions,
+    onError: handleOrderError,
+  });
+
+  const renderContributionCard = (c) => (
+    <PRCard
+      pr={c}
+      collectionSlug={collection?.slug}
+      isSelf={isSelf}
+      isOpen={openCardId === c._id}
+      onToggle={() => setOpenCardId(openCardId === c._id ? null : c._id)}
+      onUpdated={handleUpdated}
+      onDeleted={isSelf ? handleDeleted : undefined}
+    />
+  );
+
+  const renderHighlightCard = (c) => (
+    <PRCard
+      pr={c}
+      collectionSlug={collection?.slug}
+      isSelf={isSelf}
+      mode="showcase"
+      isOpen={highlightOpenCardId === c._id}
+      onToggle={() =>
+        setHighlightOpenCardId(highlightOpenCardId === c._id ? null : c._id)
+      }
+      onUpdated={handleHighlightUpdated}
+    />
+  );
+
   if (authLoading) return null;
 
   return (
@@ -289,42 +340,22 @@ export default function CollectionPage() {
             {!loading && contributions.length > 0 && (
               <>
                 {/* Mobile */}
-                <div className="md:hidden space-y-4">
-                  {contributions.map((c) => (
-                    <PRCard
-                      key={c._id}
-                      pr={c}
-                      collectionSlug={collection?.slug}
-                      isSelf={isSelf}
-                      isOpen={openCardId === c._id}
-                      onToggle={() =>
-                        setOpenCardId(openCardId === c._id ? null : c._id)
-                      }
-                      onUpdated={handleUpdated}
-                      onDeleted={isSelf ? handleDeleted : undefined}
-                    />
-                  ))}
-                </div>
+                <DraggableCardList
+                  className="md:hidden space-y-4"
+                  items={contributions}
+                  enabled={isSelf}
+                  onReorder={saveContributionOrder}
+                  renderCard={renderContributionCard}
+                />
 
                 {/* Desktop */}
                 <div className="hidden md:block">
-                  <Timeline>
-                    {contributions.map((c, index) => (
-                      <TimelineItem key={c._id} index={index}>
-                        <PRCard
-                          pr={c}
-                          collectionSlug={collection?.slug}
-                          isSelf={isSelf}
-                          isOpen={openCardId === c._id}
-                          onToggle={() =>
-                            setOpenCardId(openCardId === c._id ? null : c._id)
-                          }
-                          onUpdated={handleUpdated}
-                          onDeleted={isSelf ? handleDeleted : undefined}
-                        />
-                      </TimelineItem>
-                    ))}
-                  </Timeline>
+                  <DraggableTimeline
+                    items={contributions}
+                    enabled={isSelf}
+                    onReorder={saveContributionOrder}
+                    renderCard={renderContributionCard}
+                  />
                 </div>
               </>
             )}
@@ -355,46 +386,22 @@ export default function CollectionPage() {
             {!highlightsLoading && highlightContributions.length > 0 && (
               <>
                 {/* Mobile */}
-                <div className="md:hidden space-y-4">
-                  {highlightContributions.map((c) => (
-                    <PRCard
-                      key={c._id}
-                      pr={c}
-                      collectionSlug={collection?.slug}
-                      isSelf={isSelf}
-                      mode="showcase"
-                      isOpen={highlightOpenCardId === c._id}
-                      onToggle={() =>
-                        setHighlightOpenCardId(
-                          highlightOpenCardId === c._id ? null : c._id
-                        )
-                      }
-                      onUpdated={handleHighlightUpdated}
-                    />
-                  ))}
-                </div>
+                <DraggableCardList
+                  className="md:hidden space-y-4"
+                  items={highlightContributions}
+                  enabled={isSelf}
+                  onReorder={saveHighlightOrder}
+                  renderCard={renderHighlightCard}
+                />
 
                 {/* Desktop */}
                 <div className="hidden md:block">
-                  <Timeline>
-                    {highlightContributions.map((c, index) => (
-                      <TimelineItem key={c._id} index={index}>
-                        <PRCard
-                          pr={c}
-                          collectionSlug={collection?.slug}
-                          isSelf={isSelf}
-                          mode="showcase"
-                          isOpen={highlightOpenCardId === c._id}
-                          onToggle={() =>
-                            setHighlightOpenCardId(
-                              highlightOpenCardId === c._id ? null : c._id
-                            )
-                          }
-                          onUpdated={handleHighlightUpdated}
-                        />
-                      </TimelineItem>
-                    ))}
-                  </Timeline>
+                  <DraggableTimeline
+                    items={highlightContributions}
+                    enabled={isSelf}
+                    onReorder={saveHighlightOrder}
+                    renderCard={renderHighlightCard}
+                  />
                 </div>
               </>
             )}
@@ -410,7 +417,9 @@ export default function CollectionPage() {
           collectionSlug={collection?.slug}
           onClose={() => setOpen(false)}
           onCreated={(newContribution) => {
-            setContributions((prev) => [newContribution, ...prev]);
+            setContributions((prev) =>
+              addNewContributions(prev, [newContribution], "collectionOrder")
+            );
             setOpen(false);
           }}
         />
@@ -421,7 +430,9 @@ export default function CollectionPage() {
           collectionSlug={collection?.slug}
           onClose={() => setOpenGitHub(false)}
           onFetched={(newContributions) => {
-            setContributions((prev) => [...newContributions, ...prev]);
+            setContributions((prev) =>
+              addNewContributions(prev, newContributions, "collectionOrder")
+            );
             setOpenGitHub(false);
             const n = newContributions.length;
             showToast(

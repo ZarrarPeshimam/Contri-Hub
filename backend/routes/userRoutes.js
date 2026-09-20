@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import Collection from "../models/Collection.js";
 import Contribution from "../models/Contribution.js";
 import { getContributionYears, getContributionWindow } from "../utils/contributionWindow.js";
+import { sortContributions } from "../utils/contributionOrder.js";
 
 const router = express.Router();
 
@@ -324,9 +325,12 @@ router.get("/:username/collections/:slug/contributions", async (req, res) => {
     if (!collection)
       return res.status(404).json({ message: "Collection not found" });
 
-    const contributions = await Contribution.find({
-      collectionId: collection._id,
-    }).sort({ createdAtGithub: 1 });
+    // Manual order first; never-arranged cards keep the original
+    // oldest → newest order (see utils/contributionOrder.js).
+    const contributions = sortContributions(
+      await Contribution.find({ collectionId: collection._id }),
+      "collection"
+    );
 
     res.json({ collection, contributions });
   } catch {
@@ -348,12 +352,15 @@ router.get("/:username/highlights", async (req, res) => {
     const user = await User.findOne({ username: req.params.username }).select("_id");
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const contributions = await Contribution.find({
-      user: user._id,
-      highlightScope: "overall",
-    })
-      .sort({ createdAtGithub: -1 })
-      .populate("collectionId", "title slug");
+    // Manual order first (overallHighlightOrder); never-arranged cards keep
+    // the original newest-first order.
+    const contributions = sortContributions(
+      await Contribution.find({
+        user: user._id,
+        highlightScope: "overall",
+      }).populate("collectionId", "title slug"),
+      "overallHighlight"
+    );
 
     res.json({ contributions });
   } catch (err) {
@@ -383,10 +390,15 @@ router.get("/:username/collections/:slug/highlights", async (req, res) => {
     if (!collection)
       return res.status(404).json({ message: "Collection not found" });
 
-    const contributions = await Contribution.find({
-      collectionId: collection._id,
-      highlightScope: { $in: ["collection", "overall"] },
-    }).sort({ createdAtGithub: -1 });
+    // Manual order first (collectionHighlightOrder — independent from the
+    // overall list); never-arranged cards keep the original newest-first order.
+    const contributions = sortContributions(
+      await Contribution.find({
+        collectionId: collection._id,
+        highlightScope: { $in: ["collection", "overall"] },
+      }),
+      "collectionHighlight"
+    );
 
     res.json({ collection, contributions });
   } catch (err) {

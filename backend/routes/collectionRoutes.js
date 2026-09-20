@@ -11,6 +11,11 @@ import {
 import { fetchGitHubPRs } from "../services/githubService.js";
 import { fetchPRDetail, fetchLinkedIssueBodies } from "../services/githubAIService.js";
 import { generateSummary } from "../services/groqService.js";
+import {
+  getNextOrder,
+  saveOrder,
+  sortContributions,
+} from "../utils/contributionOrder.js";
 
 const router = express.Router();
 
@@ -192,6 +197,32 @@ router.put("/reorder", auth, async (req, res) => {
 });
 
 /* =========================
+   REORDER OVERALL HIGHLIGHTS
+   PUT /api/collections/highlights/reorder
+   Body: { orderedIds: ["<contributionId>", ...] }
+
+   Ordering context: user + overall highlights. Only writes
+   `overallHighlightOrder`, so neither the collection timelines nor the
+   collection-wise highlight lists are affected.
+   Auth: owner only — the list is scoped to req.userId server-side.
+========================= */
+router.put("/highlights/reorder", auth, async (req, res) => {
+  try {
+    const result = await saveOrder({
+      filter: { user: req.userId, highlightScope: "overall" },
+      contextKey: "overallHighlight",
+      orderedIds: req.body?.orderedIds,
+    });
+
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    res.json({ message: "Order saved" });
+  } catch (err) {
+    console.error("Reorder overall highlights error:", err);
+    res.status(500).json({ message: "Failed to save order" });
+  }
+});
+
+/* =========================
    UPDATE COLLECTION
    PUT /api/collections/:slug
 
@@ -313,6 +344,14 @@ router.post("/:slug/contributions", auth, async (req, res) => {
 
     const originalDescription = description || "";
 
+    // If this collection's timeline has been manually arranged, the new
+    // card goes to the end so no existing card moves. Otherwise null keeps
+    // the legacy default ordering.
+    const collectionOrder = await getNextOrder(
+      { user: req.userId, collectionId: collection._id },
+      "collectionOrder"
+    );
+
     const contribution = await Contribution.create({
       title,
       originalDescription,
@@ -327,6 +366,7 @@ router.post("/:slug/contributions", auth, async (req, res) => {
       collectionId: collection._id,
       linkedIssues,
       lastSyncedAt: shouldDetect ? new Date() : null,
+      collectionOrder,
     });
 
     res.status(201).json(contribution);
@@ -345,12 +385,74 @@ router.get("/me/:slug/contributions", auth, async (req, res) => {
     const collection = await Collection.findOne({ user: req.userId, slug: req.params.slug });
     if (!collection) return res.status(404).json({ message: "Collection not found" });
 
-    const contributions = await Contribution.find({ collectionId: collection._id })
-      .sort({ createdAtGithub: 1 });
+    const contributions = sortContributions(
+      await Contribution.find({ collectionId: collection._id }),
+      "collection"
+    );
 
     res.json({ collection, contributions });
   } catch {
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+/* =========================
+   REORDER COLLECTION CONTRIBUTIONS
+   PUT /api/collections/:slug/contributions/reorder
+   Body: { orderedIds: ["<contributionId>", ...] }
+
+   Ordering context: user + collection. Only writes `collectionOrder`.
+   The collection is looked up by { slug, user: req.userId }, so another
+   user's collection simply 404s, and every id must belong to it.
+========================= */
+router.put("/:slug/contributions/reorder", auth, async (req, res) => {
+  try {
+    const collection = await Collection.findOne({ user: req.userId, slug: req.params.slug });
+    if (!collection) return res.status(404).json({ message: "Collection not found" });
+
+    const result = await saveOrder({
+      filter: { user: req.userId, collectionId: collection._id },
+      contextKey: "collection",
+      orderedIds: req.body?.orderedIds,
+    });
+
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    res.json({ message: "Order saved" });
+  } catch (err) {
+    console.error("Reorder contributions error:", err);
+    res.status(500).json({ message: "Failed to save order" });
+  }
+});
+
+/* =========================
+   REORDER COLLECTION-WISE HIGHLIGHTS
+   PUT /api/collections/:slug/highlights/reorder
+   Body: { orderedIds: ["<contributionId>", ...] }
+
+   Ordering context: user + collection + highlights. The list is exactly
+   what the Highlights tab shows for this collection (scope "collection"
+   OR "overall"). Only writes `collectionHighlightOrder`.
+========================= */
+router.put("/:slug/highlights/reorder", auth, async (req, res) => {
+  try {
+    const collection = await Collection.findOne({ user: req.userId, slug: req.params.slug });
+    if (!collection) return res.status(404).json({ message: "Collection not found" });
+
+    const result = await saveOrder({
+      filter: {
+        user: req.userId,
+        collectionId: collection._id,
+        highlightScope: { $in: ["collection", "overall"] },
+      },
+      contextKey: "collectionHighlight",
+      orderedIds: req.body?.orderedIds,
+    });
+
+    if (!result.ok) return res.status(result.status).json({ message: result.message });
+    res.json({ message: "Order saved" });
+  } catch (err) {
+    console.error("Reorder collection highlights error:", err);
+    res.status(500).json({ message: "Failed to save order" });
   }
 });
 
@@ -414,6 +516,14 @@ router.post("/:slug/add-from-github", auth, async (req, res) => {
 
     const shouldDetect = dbUser?.settings?.autoDetectIssues !== false;
     const shouldAI     = dbUser?.settings?.autoAISummary     === true;
+
+    // null → timeline never manually arranged → legacy default ordering.
+    // Otherwise the batch is appended after existing cards, in fetch order.
+    let nextCollectionOrder = await getNextOrder(
+      { user: req.userId, collectionId: collection._id },
+      "collectionOrder"
+    );
+
     const created = [];
     let duplicateCount = 0;
     let invalidCount = 0;
@@ -473,8 +583,10 @@ router.post("/:slug/add-from-github", auth, async (req, res) => {
           collectionId: collection._id,
           linkedIssues,
           lastSyncedAt: shouldDetect ? new Date() : null,
+          collectionOrder: nextCollectionOrder,
         });
 
+        if (nextCollectionOrder !== null) nextCollectionOrder += 1;
         created.push(newContribution);
       } catch (err) {
         if (err.code === 11000) {
@@ -604,9 +716,65 @@ router.put("/:slug/contributions/:contributionId/highlight", auth, async (req, r
     const collection = await Collection.findOne({ user: req.userId, slug: req.params.slug });
     if (!collection) return res.status(404).json({ message: "Collection not found" });
 
+    const ownerScope = {
+      _id: req.params.contributionId,
+      user: req.userId,
+      collectionId: collection._id,
+    };
+
+    const existing = await Contribution.findOne(ownerScope);
+    if (!existing)
+      return res.status(404).json({ message: "Contribution not found or unauthorized" });
+
+    const update = { highlightScope };
+
+    /*
+      Keep each highlight list's own order consistent with membership —
+      and touch nothing else (collectionOrder is never written here):
+
+        Overall list             = scope "overall"
+        Collection highlight list = scope "collection" OR "overall"
+
+      • Joining a list  → appended to the end (null if that list has never
+                          been arranged, so it keeps its default order).
+      • Leaving a list  → that list's order value is cleared, so a later
+                          re-highlight starts fresh instead of reviving a
+                          stale position.
+      • Staying in a list (e.g. "collection" → "overall" is still in the
+        collection highlight list) → its position there is left alone.
+    */
+    const prevScope = existing.highlightScope || "none";
+    const wasOverall = prevScope === "overall";
+    const isOverall = highlightScope === "overall";
+    const wasInCollectionList = prevScope !== "none";
+    const isInCollectionList = highlightScope !== "none";
+
+    if (isOverall !== wasOverall) {
+      update.overallHighlightOrder = isOverall
+        ? await getNextOrder(
+            { user: req.userId, highlightScope: "overall", _id: { $ne: existing._id } },
+            "overallHighlightOrder"
+          )
+        : null;
+    }
+
+    if (isInCollectionList !== wasInCollectionList) {
+      update.collectionHighlightOrder = isInCollectionList
+        ? await getNextOrder(
+            {
+              user: req.userId,
+              collectionId: collection._id,
+              highlightScope: { $in: ["collection", "overall"] },
+              _id: { $ne: existing._id },
+            },
+            "collectionHighlightOrder"
+          )
+        : null;
+    }
+
     const contribution = await Contribution.findOneAndUpdate(
-      { _id: req.params.contributionId, user: req.userId, collectionId: collection._id },
-      { $set: { highlightScope } },
+      ownerScope,
+      { $set: update },
       { new: true, runValidators: true }
     );
 

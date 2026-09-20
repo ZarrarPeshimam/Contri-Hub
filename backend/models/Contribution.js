@@ -87,6 +87,23 @@ const contributionSchema = new mongoose.Schema(
       default: "none",
       index: true,
     },
+
+    /**
+     * Manual card ordering — one field per ordering context, so that
+     * dragging a card in one place can never move it in another:
+     *
+     *   collectionOrder          position inside its own collection's timeline
+     *   overallHighlightOrder    position in the user's Overall Highlights
+     *   collectionHighlightOrder position in its collection's Highlights tab
+     *
+     * `null` = never manually arranged. Those cards fall back to the
+     * original default ordering (see utils/contributionOrder.js), so
+     * documents created before this feature keep working untouched.
+     * Values are only ever compared relative to each other; gaps are fine.
+     */
+    collectionOrder:          { type: Number, default: null },
+    overallHighlightOrder:    { type: Number, default: null },
+    collectionHighlightOrder: { type: Number, default: null },
   },
   { timestamps: true }
 );

@@ -12,6 +12,11 @@ export default function Timeline({ children }) {
   const total = items.length;
   const showMarkers = total > 1;
 
+  // Changes when cards are re-ordered even though `total` doesn't. The line
+  // spans first-card-centre → last-card-centre, and a reorder changes which
+  // cards those are without resizing anything, so it must be re-measured.
+  const orderKey = items.map((child) => child.key).join("|");
+
   const containerRef = useRef(null);
   const itemRefs = useRef([]);
   const [line, setLine] = useState({ top: 0, height: 0 });
@@ -54,7 +59,7 @@ export default function Timeline({ children }) {
       resizeObserver.disconnect();
       window.removeEventListener("resize", updateLine);
     };
-  }, [showMarkers, total]);
+  }, [showMarkers, total, orderKey]);
 
   return (
     <div ref={containerRef} className="relative overflow-x-hidden py-6">

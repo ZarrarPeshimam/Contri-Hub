@@ -133,6 +133,8 @@ export default function PRCard({
   return (
     <>
       <div
+        data-pr-card
+        data-editing={isEditing ? "true" : undefined}
         className="group relative w-full max-w-2xl overflow-hidden rounded-2xl bg-[#2B0A10] border border-gray-700 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#45101D]/40 hover:-translate-y-0.5 cursor-pointer"
         onClick={() => !isEditing && onToggle()}
       >
@@ -253,8 +255,11 @@ export default function PRCard({
           )}
         </div>
 
-        {/* ── Expandable bottom section ── */}
+        {/* ── Expandable bottom section ──
+            data-no-dnd: dragging never starts from here, so the expanded
+            description text stays selectable (see lib/contributionDnd.js). */}
         <div
+          data-no-dnd
           className={`overflow-hidden transition-all duration-500 ease-out bg-gradient-to-b from-[#2B0A10] to-[#45101D] border-t border-[#5A1627]
             ${isOpen || isEditing ? "max-h-[620px]" : "max-h-0"}`}
         >

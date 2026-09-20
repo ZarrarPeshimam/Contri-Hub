@@ -1,14 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../lib/api";
 import { useAuth } from "../../hooks/useAuth";
-import Timeline from "../../components/collections/Timeline";
-import TimelineItem from "../../components/collections/TimelineItem";
+import {
+  DraggableTimeline,
+  DraggableCardList,
+} from "../../components/collections/DraggableContributions";
 import PRCard from "../../components/collections/PRCard";
 import HighlightsNav from "../../components/highlights/HighlightsNav";
 import HighlightsEmptyState from "../../components/highlights/HighlightsEmptyState";
 import BackLink from "../../components/ui/BackLink";
 import PageTransition from "../../components/layout/PageTransition";
+import { useToast, ToastContainer } from "../../components/ui/Toast";
+import useSaveOrder from "../../hooks/useSaveOrder";
 
 /**
  * OverallHighlightsPage
@@ -36,6 +40,7 @@ export default function OverallHighlightsPage() {
   const [collections, setCollections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openCardId, setOpenCardId] = useState(null);
+  const { toasts, showToast, dismiss } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -79,9 +84,37 @@ export default function OverallHighlightsPage() {
     });
   };
 
+  // Owner-only manual ordering for THIS list only (overallHighlightOrder) —
+  // independent from every collection's timeline and highlight order.
+  const handleOrderError = useCallback(
+    () => showToast("Failed to save order. Changes reverted.", "error"),
+    [showToast]
+  );
+
+  const saveOrder = useSaveOrder({
+    endpoint: "/api/collections/highlights/reorder",
+    orderField: "overallHighlightOrder",
+    setItems: setContributions,
+    onError: handleOrderError,
+  });
+
+  const renderCard = (c) => (
+    <PRCard
+      pr={c}
+      collectionSlug={c.collectionId?.slug}
+      isSelf={isSelf}
+      mode="showcase"
+      collectionBadge={c.collectionId?.title}
+      isOpen={openCardId === c._id}
+      onToggle={() => setOpenCardId(openCardId === c._id ? null : c._id)}
+      onUpdated={handleUpdated}
+    />
+  );
+
   if (authLoading) return null;
 
   return (
+    <>
     <PageTransition className="collection-theme mx-auto max-w-6xl px-6 py-8 space-y-6">
       {/* Back to the profile this Highlights page belongs to */}
       <BackLink to={`/${username}`} label="Back to Profile" />
@@ -107,48 +140,31 @@ export default function OverallHighlightsPage() {
         {!loading && contributions.length > 0 && (
           <>
             {/* Mobile */}
-            <div className="md:hidden space-y-4">
-              {contributions.map((c) => (
-                <PRCard
-                  key={c._id}
-                  pr={c}
-                  collectionSlug={c.collectionId?.slug}
-                  isSelf={isSelf}
-                  mode="showcase"
-                  collectionBadge={c.collectionId?.title}
-                  isOpen={openCardId === c._id}
-                  onToggle={() =>
-                    setOpenCardId(openCardId === c._id ? null : c._id)
-                  }
-                  onUpdated={handleUpdated}
-                />
-              ))}
-            </div>
+            <DraggableCardList
+              className="md:hidden space-y-4"
+              items={contributions}
+              enabled={isSelf}
+              onReorder={saveOrder}
+              renderCard={renderCard}
+            />
 
             {/* Desktop */}
             <div className="hidden md:block">
-              <Timeline>
-                {contributions.map((c, index) => (
-                  <TimelineItem key={c._id} index={index}>
-                    <PRCard
-                      pr={c}
-                      collectionSlug={c.collectionId?.slug}
-                      isSelf={isSelf}
-                      mode="showcase"
-                      collectionBadge={c.collectionId?.title}
-                      isOpen={openCardId === c._id}
-                      onToggle={() =>
-                        setOpenCardId(openCardId === c._id ? null : c._id)
-                      }
-                      onUpdated={handleUpdated}
-                    />
-                  </TimelineItem>
-                ))}
-              </Timeline>
+              <DraggableTimeline
+                items={contributions}
+                enabled={isSelf}
+                onReorder={saveOrder}
+                renderCard={renderCard}
+              />
             </div>
           </>
         )}
       </div>
     </PageTransition>
+
+    {/* Outside PageTransition: its in-progress transform would otherwise
+        become the containing block for this fixed-position toast. */}
+    <ToastContainer toasts={toasts} dismiss={dismiss} position="bottom-right" />
+    </>
   );
 }
